@@ -3,8 +3,19 @@ $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..")
 # 의존성 바이너리(wheel)가 확실한 Python 3.13 → 3.12 → 3.11 순으로 찾는다(3.14 이상은 빌드 도구가 필요할 수 있음)
 $pyver = $null
-foreach ($v in "3.13", "3.12", "3.11") { py -$v -c "import sys" 2>$null; if ($LASTEXITCODE -eq 0) { $pyver = $v; break } }
-if (-not $pyver) { Write-Host "Python 3.13(또는 3.12/3.11)이 필요합니다. https://www.python.org/downloads/ 에서 설치 후 다시 실행하세요."; exit 1 }
+$ErrorActionPreference = "Continue"   # 없는 버전을 찾을 때 py 의 오류 출력으로 스크립트가 멈추지 않게
+foreach ($v in "3.13", "3.12", "3.11") {
+  try { & py "-$v" -c "import sys" *> $null; if ($LASTEXITCODE -eq 0) { $pyver = $v; break } } catch { }
+}
+$ErrorActionPreference = "Stop"
+if (-not $pyver) {
+  Write-Host ""
+  Write-Host "Python 3.13(또는 3.12/3.11)이 설치되어 있지 않습니다." -ForegroundColor Yellow
+  Write-Host "다음 중 하나로 설치한 뒤 이 스크립트를 다시 실행하세요:"
+  Write-Host "  py install 3.13                      (Python 설치 관리자를 쓰는 경우)"
+  Write-Host "  winget install Python.Python.3.13"
+  exit 1
+}
 Write-Host "Python $pyver 사용"
 if (Test-Path .venv) { Remove-Item -Recurse -Force .venv }
 py -$pyver -m venv .venv
