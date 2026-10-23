@@ -1,7 +1,13 @@
 # Windows 처음 설치(PowerShell): Python 3.11+ 와 Node.js 20+ 필요
 $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..")
-py -3 -m venv .venv
+# 의존성 바이너리(wheel)가 확실한 Python 3.13 → 3.12 → 3.11 순으로 찾는다(3.14 이상은 빌드 도구가 필요할 수 있음)
+$pyver = $null
+foreach ($v in "3.13", "3.12", "3.11") { py -$v -c "import sys" 2>$null; if ($LASTEXITCODE -eq 0) { $pyver = $v; break } }
+if (-not $pyver) { Write-Host "Python 3.13(또는 3.12/3.11)이 필요합니다. https://www.python.org/downloads/ 에서 설치 후 다시 실행하세요."; exit 1 }
+Write-Host "Python $pyver 사용"
+if (Test-Path .venv) { Remove-Item -Recurse -Force .venv }
+py -$pyver -m venv .venv
 .\.venv\Scripts\python -m pip install --upgrade pip | Out-Null
 .\.venv\Scripts\pip install -e ".[dev]"
 Push-Location apps\web; npm ci; npm run build; Pop-Location

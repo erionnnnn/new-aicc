@@ -2,10 +2,10 @@
 name = "new-aicc"
 version = "0.1.0"
 description = "간병사 일정 확인 AICC — API 서버, PC 에이전트, 공통 로직"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.15"
 dependencies = [
   "fastapi>=0.115",
-  "uvicorn[standard]>=0.30",
+  "uvicorn>=0.30",
   "sqlalchemy>=2.0",
   "alembic>=1.13",
   "openpyxl>=3.1",
