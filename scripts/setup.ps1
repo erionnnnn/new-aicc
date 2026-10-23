@@ -1,4 +1,4 @@
-# Windows 처음 설치(PowerShell): Python 3.11+ 와 Node.js 20+ 필요
+﻿# Windows 처음 설치(PowerShell): Python 3.11+ 와 Node.js 20+ 필요
 $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..")
 # 의존성 바이너리(wheel)가 확실한 Python 3.13 → 3.12 → 3.11 순으로 찾는다(3.14 이상은 빌드 도구가 필요할 수 있음)
