@@ -91,13 +91,46 @@ def supervise_agent(env_file: Path, base: str, stop: threading.Event) -> None:  
     agent_stop.set()
 
 
+def _pause(msg: str) -> None:  # pragma: no cover
+    """바탕화면 아이콘으로 실행했을 때 창이 바로 닫혀 원인을 못 보는 일을 막는다."""
+    try:
+        input(msg)
+    except (EOFError, KeyboardInterrupt):
+        pass
+
+
 def main(argv: list[str] | None = None) -> int:  # pragma: no cover - 프로세스 실행
+    import traceback
+
+    try:
+        return _run(argv)
+    except SystemExit:
+        raise
+    except BaseException:  # noqa: BLE001
+        err = traceback.format_exc()
+        print("\n[AICC 실행 오류] 아래 내용을 캡처해서 담당자에게 보내 주세요.\n")
+        print(err)
+        try:
+            data = Path(os.environ.get("AICC_DATA_DIR", ".aicc"))
+            data.mkdir(parents=True, exist_ok=True)
+            (data / "aicc_error.log").write_text(err, encoding="utf-8")
+            print(f"오류 기록 파일: {(data / 'aicc_error.log').resolve()}")
+        except OSError:
+            pass
+        _pause("\nEnter 를 누르면 창을 닫습니다...")
+        return 1
+
+
+def _run(argv: list[str] | None = None) -> int:  # pragma: no cover - 프로세스 실행
     ap = argparse.ArgumentParser(prog="aicc", description="간병사 일정 확인 AICC 실행")
     ap.add_argument("--host", default=os.environ.get("AICC_HOST", "127.0.0.1"))
     ap.add_argument("--port", type=int, default=int(os.environ.get("AICC_PORT", "8765")))
     ap.add_argument("--no-browser", action="store_true")
     a = ap.parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    data_dir = Path(os.environ.get("AICC_DATA_DIR", ".aicc"))
+    data_dir.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s",
+                        handlers=[logging.StreamHandler(), logging.FileHandler(data_dir / "aicc.log", encoding="utf-8")])
     url = f"http://{'127.0.0.1' if a.host in ('0.0.0.0', '') else a.host}:{a.port}"
     if _port_open("127.0.0.1", a.port):
         print(f"이미 실행 중입니다. 관리화면을 엽니다: {url}")
@@ -113,10 +146,14 @@ def main(argv: list[str] | None = None) -> int:  # pragma: no cover - 프로세�
     server = uvicorn.Server(uvicorn.Config(create_app(), host=a.host, port=a.port, log_level="info"))
     t = threading.Thread(target=server.run, daemon=True, name="aicc-server")
     t.start()
-    for _ in range(100):
+    for _ in range(300):
         if _port_open("127.0.0.1", a.port):
             break
+        if not t.is_alive():
+            break
         time.sleep(0.1)
+    if not _port_open("127.0.0.1", a.port):
+        raise RuntimeError(f"서버가 시작되지 않았습니다. 기록 파일을 확인하세요: {(data_dir / 'aicc.log').resolve()}")
     stop = threading.Event()
     threading.Thread(target=supervise_agent, args=(s.data_dir / "agent.env", url, stop), daemon=True).start()
     print(f"\nAICC 관리화면: {url}\n데이터 위치: {s.data_dir}\n종료하려면 이 창에서 Ctrl+C\n")
