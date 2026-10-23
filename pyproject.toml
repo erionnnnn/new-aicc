@@ -1,0 +1,52 @@
+[project]
+name = "new-aicc"
+version = "0.1.0"
+description = "간병사 일정 확인 AICC — API 서버, PC 에이전트, 공통 로직"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "sqlalchemy>=2.0",
+  "alembic>=1.13",
+  "openpyxl>=3.1",
+  "python-multipart>=0.0.9",
+  "cryptography>=42",
+  "httpx>=0.27",
+  "pydantic>=2.7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.5"]
+# 실시간 음성(실기기/평가용). 기본 설치에서 제외 — 설치 전 라이선스·용량 확인
+voice = ["numpy>=1.26", "sounddevice>=0.4", "faster-whisper>=1.0", "google-genai>=1.0"]
+postgres = ["psycopg[binary]>=3.1"]
+
+[project.scripts]
+aicc = "aicc_agent.launcher:main"
+aicc-probe = "aicc_agent.probe:main"
+aicc-simulate = "aicc_agent.simulate:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = { "aicc_core" = "packages/core/aicc_core", "aicc_api" = "services/api/aicc_api", "aicc_agent" = "apps/agent/aicc_agent" }
+packages = ["aicc_core", "aicc_api", "aicc_api.routers", "aicc_agent"]
+
+[tool.setuptools.package-data]
+aicc_api = ["migrations/*.py", "migrations/versions/*.py", "alembic.ini", "static/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "I"]
+ignore = ["B008", "E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011", "B017"]
