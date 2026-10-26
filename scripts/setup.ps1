@@ -21,6 +21,13 @@ if (Test-Path .venv) { Remove-Item -Recurse -Force .venv }
 py -$pyver -m venv .venv
 .\.venv\Scripts\python -m pip install --upgrade pip | Out-Null
 .\.venv\Scripts\pip install -e ".[dev]"
+if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
+  Write-Host ""
+  Write-Host "Node.js 가 설치되어 있지 않습니다(웹 화면 빌드에 필요)." -ForegroundColor Yellow
+  Write-Host "  winget install OpenJS.NodeJS.LTS"
+  Write-Host "설치 후 PowerShell 창을 새로 열고 이 스크립트를 다시 실행하세요."
+  exit 1
+}
 Push-Location apps\web; npm ci; npm run build; Pop-Location
 # 바탕화면 바로가기(AICC) 생성 — 이후 이 아이콘 하나만 실행
 $lnk = Join-Path ([Environment]::GetFolderPath("Desktop")) "AICC.lnk"
