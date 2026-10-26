@@ -52,6 +52,7 @@ class GcarFileTx:
         self._proc: subprocess.Popen | None = None
         self._remote: list[str] = []
         self.played_ms = 0
+        self.last_events: list[dict] = []
 
     # ---- 경로 ----
     def _dev(self, suffix: str) -> str:
@@ -64,6 +65,7 @@ class GcarFileTx:
         self.stop()
         self.call_id = uuid.uuid4().hex  # 32자리 소문자
         self.workdir.mkdir(parents=True, exist_ok=True)
+        verify_bundled(self.jar)
         self.adb.run("push", str(self.jar), self._dev(".jar"), timeout=30)
         self._remote = [self._dev(".jar")]
         self._buf.clear()
@@ -92,6 +94,7 @@ class GcarFileTx:
         try:
             self.adb.run("shell", f"rm -f {stop}", timeout=10)
             self.adb.run("push", str(local), gcar, timeout=30)
+            self.adb.run("shell", f"chmod 600 {self._dev('.jar')} {gcar}", timeout=10)
         finally:
             try:
                 local.unlink()
@@ -104,20 +107,21 @@ class GcarFileTx:
         dur = len(pcm) / BYTES_PER_SEC
         self._proc = self.adb.popen(*cmd)
         try:
-            rc = self._proc.wait(timeout=dur + self.extra_wait_s)
+            out, err = self._proc.communicate(timeout=dur + self.extra_wait_s)
+            rc = self._proc.returncode
         except subprocess.TimeoutExpired:
             self.stop_playback()
             raise DeviceError("송출 모듈이 제한 시간 안에 끝나지 않았습니다") from None
         finally:
-            err = b""
-            if self._proc and self._proc.stderr:
-                try:
-                    err = self._proc.stderr.read() or b""
-                except (OSError, ValueError):
-                    err = b""
             self._proc = None
-        if rc not in (0, None):
-            raise DeviceError(f"송출 모듈 실행 실패(코드 {rc}): {err.decode('utf-8', 'ignore')[-200:]}")
+        events = parse_events((out or b"") + b"\n" + (err or b""))
+        self.last_events = events
+        bad = next((e for e in events if e.get("kind") == "error"), None)
+        if bad or rc not in (0, None):
+            msg = bad.get("message") if bad else (err or b"").decode("utf-8", "ignore")[-200:]
+            raise DeviceError(f"송출 모듈 실행 실패(코드 {rc}): {msg}")
+        if not any(e.get("kind") in ("written", "stopped") for e in events) and events:
+            raise DeviceError("송출 모듈이 완료 신호(written)를 보내지 않았습니다")
         self.played_ms += int(dur * 1000)
 
     def stop_playback(self) -> None:
@@ -148,9 +152,38 @@ class GcarFileTx:
         self.call_id = None
 
 
+BUNDLED_JAR = Path(__file__).resolve().parent / "bin" / "goodcare-uplink.jar"  # GitHub Actions 빌드 결과
+
+
+def verify_bundled(jar: Path) -> None:
+    """저장소 빌드 JAR 은 매니페스트의 해시와 일치해야 쓴다(기존 checked_helper 와 같은 원칙)."""
+    import hashlib
+    import json
+    man = jar.with_suffix(".json")
+    if not man.is_file():
+        return
+    meta = json.loads(man.read_text(encoding="utf-8"))
+    if meta.get("protocol") != "GCAR-1" or hashlib.sha256(jar.read_bytes()).hexdigest() != meta.get("sha256"):
+        raise DeviceError("송출 모듈 무결성 확인 실패(goodcare-uplink.jar 해시 불일치)")
+
+
+def parse_events(raw: bytes) -> list[dict]:
+    """Uplink.java 는 한 줄에 하나씩 {"kind":..., "message":...} JSON 을 출력한다."""
+    import json
+    out = []
+    for line in raw.decode("utf-8", "replace").splitlines():
+        line = line.strip()
+        if line.startswith("{"):
+            try:
+                out.append(json.loads(line))
+            except ValueError:
+                pass
+    return out
+
+
 def default_jar() -> Path | None:
     from .scrcpy_rx import REPO_ROOT
-    for cand in (REPO_ROOT / "tools" / "uplink" / "goodcare-uplink.jar",):
+    for cand in (REPO_ROOT / "tools" / "uplink" / "goodcare-uplink.jar", BUNDLED_JAR):
         if cand.is_file():
             return cand
     return None

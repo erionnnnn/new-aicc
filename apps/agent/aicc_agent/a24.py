@@ -80,7 +80,7 @@ class Adb:
             raise DeviceError("adb 실행 파일을 찾지 못했습니다")
         self.ensure_ready()
         cmd = [self.adb] + (["-s", self.serial] if self.serial else []) + list(args)
-        return subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+        return subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
 
     def run(self, *args: str, timeout: float = 15.0) -> str:

@@ -232,7 +232,13 @@ def test_gcar_header_format():
 class FakeProc:
     def __init__(self, rc=0):
         self.rc = rc
+        self.returncode = rc
         self.stderr = None
+
+    def communicate(self, timeout=None):
+        if self.rc:
+            return b'{"kind":"error","message":"IllegalStateException: Connect a cellular call first"}\n', b""
+        return b'{"kind":"route","message":"Telephony TX selected"}\n{"kind":"written","message":"ok"}\n', b""
 
     def wait(self, timeout=None):
         return self.rc
@@ -288,7 +294,7 @@ def test_gcar_tx_failure_and_a24_flush(tmp_path):
     d.dial("01012345678")
     assert tx.call_id is not None  # 발신과 함께 JAR 준비
     d.write_tx_frames(split_frames(tone(100), 0))
-    with pytest.raises(DeviceError, match="송출 모듈 실행 실패"):
+    with pytest.raises(DeviceError, match="Connect a cellular call first"):
         d.tx_segment_done("opening")
     d.hangup()
     assert tx.call_id is None
