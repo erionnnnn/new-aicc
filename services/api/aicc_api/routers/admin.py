@@ -490,6 +490,8 @@ def local_agent(p: Principal = Depends(current_user)) -> dict:
         "stt_engine": env.get("AICC_STT_ENGINE") or "faster-whisper",
         "whisper_model": env.get("AICC_WHISPER_MODEL") or "small",
         "tx_device": env.get("AICC_TX_DEVICE") or "", "gemini_model": env.get("AICC_GEMINI_MODEL") or "",
+        "tx_adb_target": env.get("AICC_TX_ADB_TARGET") or "", "tx_rate": env.get("AICC_TX_RATE") or "16000",
+        "tx_channels": env.get("AICC_TX_CHANNELS") or "1", "tx_start_cmd": env.get("AICC_TX_START_CMD") or "",
         "has_gemini_key": bool(env.get("GEMINI_API_KEY")),  # 키 원문은 돌려주지 않는다
         "status": status_file.read_text(encoding="utf-8") if status_file.is_file() else None,
         "output_devices": outputs,
@@ -502,6 +504,11 @@ class LocalAgentIn(BaseModel):
     tx_device: str | None = Field(default=None, max_length=200)
     gemini_model: str | None = Field(default=None, max_length=100)
     gemini_api_key: str | None = Field(default=None, max_length=200)  # 빈 문자열이면 삭제, None 이면 유지
+    tx_adb_target: str | None = Field(default=None, max_length=140,
+                                pattern=r"^$|^(tcp:[0-9]+|localabstract:[A-Za-z0-9_.\-]+|localfilesystem:[A-Za-z0-9_./\-]+)$")
+    tx_rate: str | None = Field(default=None, pattern="^(8000|16000|24000|32000|44100|48000)$")
+    tx_channels: str | None = Field(default=None, pattern="^(1|2)$")
+    tx_start_cmd: str | None = Field(default=None, max_length=300, pattern=r"^$|^shell [A-Za-z0-9_ ./:=\-]+$")
 
 
 @router.put("/local-agent")
@@ -519,6 +526,11 @@ def put_local_agent(body: LocalAgentIn, p: Principal = Depends(current_user), db
         extra["AICC_GEMINI_MODEL"] = body.gemini_model
     if body.gemini_api_key is not None:
         extra["GEMINI_API_KEY"] = body.gemini_api_key
+    for field, key in (("tx_adb_target", "AICC_TX_ADB_TARGET"), ("tx_rate", "AICC_TX_RATE"),
+                       ("tx_channels", "AICC_TX_CHANNELS"), ("tx_start_cmd", "AICC_TX_START_CMD")):
+        v = getattr(body, field)
+        if v is not None:
+            extra[key] = v
     _write_agent_env(None, None, extra)  # 파일이 바뀌면 통합 실행 프로그램이 에이전트를 다시 시작한다
     audit(db, p, "local_agent.update", "organization", p.org.id,
           {k: ("***" if k == "GEMINI_API_KEY" else v) for k, v in extra.items()})

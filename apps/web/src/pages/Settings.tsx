@@ -302,6 +302,8 @@ function PilotPanel({ me }: { me: Me }) {
     try {
       await api.put("/api/v1/local-agent", {
         whisper_model: f.get("wmodel"), tx_device: f.get("tx") ?? "", gemini_model: f.get("gmodel") ?? "",
+        tx_adb_target: String(f.get("txt") ?? "").trim(), tx_rate: f.get("txr"), tx_channels: f.get("txc"),
+        tx_start_cmd: String(f.get("txs") ?? "").trim(),
         ...(key ? { gemini_api_key: key } : {}),
       });
       setMsg("에이전트 설정을 저장했습니다. 몇 초 뒤 에이전트가 다시 시작됩니다."); la.reload();
@@ -332,7 +334,19 @@ function PilotPanel({ me }: { me: Me }) {
                 {["tiny", "base", "small", "medium", "large-v3-turbo"].map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
             </Field>
-            <Field label="안내 음성 송신(TX) 출력 장치" hint="없으면 시험 모드에서 안내 음성 없이 흐름만 시험합니다">
+            <Field label="휴대폰 송출 모듈 소켓(TX)" hint="예: tcp:28200 또는 localabstract:이름 — 기존 송출 모듈이 듣는 주소">
+              <input name="txt" defaultValue={a.tx_adb_target} placeholder="tcp:28200" />
+            </Field>
+            <Field label="송출 형식(샘플레이트·채널)">
+              <div className="inline-form">
+                <select name="txr" defaultValue={a.tx_rate}>{["8000", "16000", "24000", "32000", "44100", "48000"].map((r) => <option key={r} value={r}>{r} Hz</option>)}</select>
+                <select name="txc" defaultValue={a.tx_channels}><option value="1">모노</option><option value="2">스테레오</option></select>
+              </div>
+            </Field>
+            <Field label="송출 모듈 시작 명령(선택)" hint="예: shell am startservice -n 패키지/.서비스">
+              <input name="txs" defaultValue={a.tx_start_cmd} placeholder="shell ..." />
+            </Field>
+            <Field label="(대안) PC 출력 장치로 송신" hint="송출 모듈을 쓰면 비워 두세요">
               {a.output_devices ? (
                 <select name="tx" defaultValue={a.tx_device}>
                   <option value="">없음(송신 안 함)</option>

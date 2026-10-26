@@ -217,11 +217,19 @@ class A24Device(DeviceAdapter):
         if self.rx is not None and hasattr(self.rx, "start") and not self._rx_running:
             self.rx.start()  # 발신 직후 시작해 상대 첫마디를 놓치지 않게 한다
             self._rx_running = True
+        if self.tx is not None and self.tx is not self.rx and hasattr(self.tx, "start"):
+            try:
+                self.tx.start()  # 휴대폰 송출 모듈 연결(오프닝 전에 미리)
+            except DeviceError:
+                self._stop_rx()
+                raise
 
     def _stop_rx(self) -> None:
         if self.rx is not None and hasattr(self.rx, "stop") and self._rx_running:
             self.rx.stop()
         self._rx_running = False
+        if self.tx is not None and self.tx is not self.rx and hasattr(self.tx, "stop"):
+            self.tx.stop()
 
     def dial(self, number: str) -> str:
         if not re.fullmatch(r"0\d{8,10}", number):

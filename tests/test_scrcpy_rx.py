@@ -167,3 +167,52 @@ def test_a24_starts_rx_on_dial_stops_on_hangup_and_tx_locked(tmp_path):
     from aicc_agent.device import DeviceUnverified
     with pytest.raises(DeviceUnverified):
         d.write_tx_frames([])
+
+
+def test_adb_socket_tx_sends_converted_pcm_and_cleans_forward():
+    import socket as _s
+    import threading
+
+    from aicc_agent.adb_tx import AdbSocketTx, convert_pcm
+    from aicc_agent.audio import split_frames, tone
+
+    srv = _s.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(1)
+    port = srv.getsockname()[1]
+    got = bytearray()
+
+    def serve():
+        c, _ = srv.accept()
+        while True:
+            b = c.recv(65536)
+            if not b:
+                break
+            got.extend(b)
+        c.close()
+    th = threading.Thread(target=serve, daemon=True)
+    th.start()
+    adb = FakeAdb()
+    tx = AdbSocketTx(adb, "localabstract:aicc_tx", rate=48000, channels=2, local_port=port,
+                     start_cmd="shell am startservice -n com.x/.Tx")
+    tx.start()
+    frames = split_frames(tone(200), 0)  # 10 frames
+    t0 = time.monotonic()
+    assert tx.write(frames) == 10
+    assert time.monotonic() - t0 >= 0.12  # 실시간 속도 송출
+    tx.stop()
+    th.join(2)
+    assert len(got) == 10 * 960 * 2 * 2  # 20ms @48k stereo 16bit
+    assert ("forward", f"tcp:{port}", "localabstract:aicc_tx") in adb.calls
+    assert ("shell", "am", "startservice", "-n", "com.x/.Tx") in adb.calls
+    assert ("forward", "--remove", f"tcp:{port}") in adb.calls
+    assert len(convert_pcm(b"\x01\x00" * 320, 16000, 1)) == 640
+
+
+def test_adb_socket_tx_unreachable_raises():
+    from aicc_agent.adb_tx import AdbSocketTx
+    tx = AdbSocketTx(FakeAdb(), "tcp:28200", local_port=1, connect_timeout_s=0.5)
+    with pytest.raises(DeviceError, match="송출 모듈"):
+        tx.start()
+    with pytest.raises(ValueError):
+        AdbSocketTx(FakeAdb(), "28200")
