@@ -3,8 +3,8 @@
 # 필요: ANDROID_HOME(플랫폼 android-31 이상, build-tools d8), JDK 17
 set -euo pipefail
 cd "$(dirname "$0")"
-PLAT=$(ls -d "$ANDROID_HOME"/platforms/android-* | sort -V | tail -1)
-BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+PLAT=$(ls -d "$ANDROID_HOME"/platforms/android-* | grep -E "/android-[0-9]+$" | sort -V | tail -1)  # 정식(베타 아님) 플랫폼
+BT=$(ls -d "$ANDROID_HOME"/build-tools/* | grep -vE "rc|beta|preview" | sort -V | tail -1)
 echo "platform=$PLAT build-tools=$BT"
 rm -rf build && mkdir -p build/classes build/dex out
 javac --release 11 -cp "$PLAT/android.jar" -d build/classes src/com/goodcare/a24/Uplink.java
