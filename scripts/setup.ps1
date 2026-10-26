@@ -21,6 +21,9 @@ if (Test-Path .venv) { Remove-Item -Recurse -Force .venv }
 py -$pyver -m venv .venv
 .\.venv\Scripts\python -m pip install --upgrade pip | Out-Null
 .\.venv\Scripts\pip install -e ".[dev]"
+# 안내 음성 자동 생성용(선택). 실패해도 설치는 계속한다.
+& .\.venv\Scripts\pip install -e ".[tts]"
+if ($LASTEXITCODE -ne 0) { Write-Host "안내 음성 자동 생성 모듈 설치 실패 — 녹음 파일 업로드나 Windows 음성은 사용 가능" -ForegroundColor Yellow }
 if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
   Write-Host ""
   Write-Host "Node.js 가 설치되어 있지 않습니다(웹 화면 빌드에 필요)." -ForegroundColor Yellow

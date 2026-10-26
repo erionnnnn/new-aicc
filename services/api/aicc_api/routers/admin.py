@@ -39,6 +39,7 @@ def get_settings_(p: Principal = Depends(current_user)) -> dict:
 
 class SettingsIn(BaseModel):
     company_name: str | None = Field(default=None, max_length=200)
+    environment: str | None = Field(default=None, pattern="^(sandbox|production)$")
     policies: dict = {}
 
 
@@ -66,6 +67,14 @@ def put_settings(body: SettingsIn, p: Principal = Depends(current_user), db: Ses
     org.policies = pol
     if body.company_name is not None:
         org.company_name = body.company_name.strip()
+    if body.environment and body.environment != org.environment:
+        from ..models import Campaign
+        running = db.scalar(select(Campaign).where(Campaign.organization_id == org.id,
+                                                   Campaign.state.in_(("RUNNING", "STOPPING"))))
+        if running:
+            raise AppError(409, "CAMPAIGN_RUNNING", "진행 중인 캠페인을 끝낸 뒤 전환하세요")
+        audit(db, p, "org.environment", "organization", org.id, {"from": org.environment, "to": body.environment})
+        org.environment = body.environment  # 기존 MOCK 결과는 is_mock 표시가 그대로 남는다
     audit(db, p, "settings.update", "organization", org.id, {"keys": sorted(body.policies.keys())})
     db.commit()
     return {"ok": True, "policy_problems": services.policy_problems(org)}
@@ -87,6 +96,9 @@ def _pack_out(db: Session, p: Principal, vp: VoicePack) -> dict:
 @router.get("/voice-packs")
 def list_packs(p: Principal = Depends(current_user), db: Session = Depends(get_db)) -> list[dict]:
     require(p, "view_results")
+    if services.latest_pack(db, p.org.id, "female") is None:
+        ensure_default_packs(db, p)  # '기본 음원팩 만들기' 없이도 항상 문구표가 보이게 한다
+        db.commit()
     out = []
     for key in ("female", "male"):
         vp = services.latest_pack(db, p.org.id, key)
@@ -109,16 +121,115 @@ def _new_version(db: Session, p: Principal, key: str, manifest: dict) -> VoicePa
 @router.post("/voice-packs/init", status_code=201)
 def init_packs(p: Principal = Depends(current_user), db: Session = Depends(get_db)) -> list[dict]:
     require(p, "settings")
-    out = []
+    out = [_pack_out(db, p, vp) for vp in ensure_default_packs(db, p)]
+    db.commit()
+    return out
+
+
+def ensure_default_packs(db: Session, p: Principal) -> list[VoicePack]:
+    made = []
     for key, gender, speaker in (("female", "F", "김태희 실장"), ("male", "M", "")):
         if services.latest_pack(db, p.org.id, key) is None:
             m = default_manifest(key, gender, speaker)
             m["company_name"] = p.org.company_name
             vp = _new_version(db, p, key, m)
             audit(db, p, "voicepack.init", "voice_pack", vp.id, {"key": key})
-            out.append(_pack_out(db, p, vp))
-    db.commit()
-    return out
+            made.append(vp)
+    return made
+
+
+def _apply_company(text: str, company: str) -> str:
+    return text.replace("[회사명]", company) if company else text
+
+
+def _store_clip(p: Principal, key: str, clip: str, wav16k: bytes) -> dict:
+    import hashlib
+    h = hashlib.sha256(wav16k).hexdigest()[:16]
+    fname = f"{key}/{clip}-{h}.wav"
+    path = services.packs_dir(p.org.id) / fname
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(wav16k)
+    with wave.open(io.BytesIO(wav16k)) as w:
+        dur = int(w.getnframes() * 1000 / w.getframerate())
+    return {"file": fname, "duration_ms": dur, "sample_rate": 16000, "sha256": h}
+
+
+def _to_wav16k(data: bytes) -> bytes:
+    """WAV(아무 채널·샘플레이트)·MP3·FLAC 을 16kHz 16bit 모노 WAV 로 바꾼다."""
+    try:
+        with wave.open(io.BytesIO(data)) as w:
+            if w.getnchannels() == 1 and w.getsampwidth() == 2 and w.getframerate() == 16000:
+                return data
+    except (wave.Error, EOFError):
+        pass
+    try:
+        import miniaudio
+    except ImportError as e:
+        raise AppError(422, "CLIP_FORMAT", "16kHz 16비트 모노 WAV 만 올릴 수 있습니다(변환 모듈 없음)") from e
+    try:
+        snd = miniaudio.decode(data, output_format=miniaudio.SampleFormat.SIGNED16, nchannels=1, sample_rate=16000)
+    except miniaudio.DecodeError as e:
+        raise AppError(422, "CLIP_FORMAT", "WAV·MP3·FLAC 파일만 올릴 수 있습니다(m4a 는 MP3/WAV 로 저장해 주세요)") from e
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(16000)
+        w.writeframes(snd.samples.tobytes())
+    return buf.getvalue()
+
+
+class TTSIn(BaseModel):
+    engine: str = Field(default="edge", pattern="^(edge|sapi|test)$")
+    only_missing: bool = False
+
+
+@router.post("/voice-packs/{key}/tts")
+def generate_tts(key: str, body: TTSIn, p: Principal = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    """회사명을 넣은 문구로 음원팩 전체(필수 13 + 날짜 조각 43)를 자동 음성으로 만든다. 승인은 따로 한다."""
+    from .. import tts
+
+    require(p, "settings")
+    if body.engine == "test" and p.org.environment != "sandbox":
+        raise AppError(422, "ENGINE_NOT_ALLOWED", "시험용 엔진은 시험 조직에서만 쓸 수 있습니다")
+    if not p.org.company_name.strip():
+        raise AppError(422, "COMPANY_REQUIRED", "먼저 설정 > 운영 정책에서 회사명을 입력하세요")
+    cur = services.latest_pack(db, p.org.id, key)
+    if cur is None:
+        raise AppError(404, "NOT_FOUND", "음원팩이 없습니다")
+    m = {**cur.manifest, "clips": {k: dict(v) for k, v in cur.manifest["clips"].items()}}
+    if not m.get("speaker_name"):
+        raise AppError(422, "SPEAKER_REQUIRED", "안내 인물 이름을 먼저 저장하세요")
+    made, failed = 0, []
+    for clip, c in m["clips"].items():
+        if body.only_missing and c.get("file"):
+            continue
+        text = _apply_company(c.get("text") or "", p.org.company_name.strip())
+        if not text.strip():
+            failed.append({"clip": clip, "error": "문구 없음"})
+            continue
+        try:
+            wav16k = tts.synthesize(body.engine, text, key)
+        except tts.TTSError as e:
+            failed.append({"clip": clip, "error": str(e)})
+            if made == 0:  # 첫 문구부터 실패하면 같은 원인이므로 바로 중단
+                break
+            continue
+        c.update(_store_clip(p, key, clip, wav16k), text=text, source=f"tts:{body.engine}")
+        made += 1
+    if made:
+        m["company_name"] = p.org.company_name
+        m["approved_by"] = None
+        vp = _new_version(db, p, key, m)
+        audit(db, p, "voicepack.tts", "voice_pack", vp.id, {"key": key, "engine": body.engine, "made": made,
+                                                            "failed": len(failed)})
+        db.commit()
+        out = _pack_out(db, p, vp)
+    else:
+        out = _pack_out(db, p, cur)
+    if failed and not made:
+        raise AppError(502, "TTS_FAILED", failed[0]["error"], {"failed": failed[:5]})
+    return {**out, "generated": made, "failed": failed}
 
 
 class PackPatch(BaseModel):
@@ -157,22 +268,10 @@ async def upload_clip(key: str, clip: str, file: UploadFile = File(...), p: Prin
     if cur is None or clip not in cur.manifest.get("clips", {}):
         raise AppError(404, "NOT_FOUND", "음원 키가 없습니다")
     data = await file.read(20 * 1024 * 1024)
-    try:
-        with wave.open(io.BytesIO(data)) as w:
-            if w.getnchannels() != 1 or w.getsampwidth() != 2:
-                raise AppError(422, "CLIP_FORMAT", "16비트 모노 WAV만 지원합니다")
-            dur = int(w.getnframes() * 1000 / w.getframerate())
-            rate = w.getframerate()
-    except wave.Error as e:
-        raise AppError(422, "CLIP_FORMAT", "WAV 파일을 읽을 수 없습니다") from e
-    import hashlib
-    h = hashlib.sha256(data).hexdigest()[:16]
-    fname = f"{key}/{clip}-{h}.wav"
-    path = services.packs_dir(p.org.id) / fname
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(data)
+    wav16k = _to_wav16k(data)
     m = {**cur.manifest, "clips": {k: dict(v) for k, v in cur.manifest["clips"].items()}}
-    m["clips"][clip].update({"file": fname, "duration_ms": dur, "sample_rate": rate, "sha256": h})
+    m["clips"][clip].update(_store_clip(p, key, clip, wav16k), source="upload")
+    m["clips"][clip]["text"] = _apply_company(m["clips"][clip].get("text") or "", p.org.company_name.strip())
     m["approved_by"] = None
     m["company_name"] = p.org.company_name
     vp = _new_version(db, p, key, m)
@@ -241,7 +340,7 @@ def list_devices(p: Principal = Depends(current_user), db: Session = Depends(get
 @router.post("/devices", status_code=201)
 def create_device(body: DeviceIn, p: Principal = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     require(p, "settings")
-    if body.kind == "mock" and p.org.environment != "sandbox":
+    if body.kind == "mock" and p.org.environment != "sandbox":  # 운영 조직에는 MOCK 등록 불가
         raise AppError(409, "MOCK_NOT_ALLOWED", "운영 조직에는 MOCK 단말을 등록할 수 없습니다")
     token = new_token()
     d = Device(organization_id=p.org.id, name=body.name, kind=body.kind, token_hash=token_hash(token))

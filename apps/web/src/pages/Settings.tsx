@@ -52,6 +52,16 @@ function Policy({ me, onChanged }: { me: Me; onChanged: () => void }) {
         <label className="inline"><input type="checkbox" name="recording_notice_confirmed" defaultChecked={!!p.recording_notice_confirmed} /> 녹음 안내·고지 방식을 담당자가 확정했습니다</label>
         <label className="inline"><input type="checkbox" name="ai_external_transfer_confirmed" defaultChecked={!!p.ai_external_transfer_confirmed} /> 예외 질문을 외부 AI로 보내는 범위를 담당자가 확정했습니다</label>
       </fieldset>
+      {admin && (
+        <div className="env-switch">
+          <strong>조직 종류: {me.organization.environment === "sandbox" ? "시험 조직(MOCK 통화만)" : "운영 조직(실기기 A24만)"}</strong>
+          <button type="button" className="btn" onClick={async () => {
+            const to = me.organization.environment === "sandbox" ? "production" : "sandbox";
+            if (!window.confirm(to === "production" ? "운영 조직으로 바꾸면 MOCK 단말로는 발신할 수 없고, 실기기 검증을 마친 A24만 발신합니다. 바꿀까요?" : "시험 조직으로 바꾸면 실기기 발신이 막히고 MOCK 통화만 됩니다. 바꿀까요?")) return;
+            try { await api.put("/api/v1/settings", { environment: to }); onChanged(); s.reload(); } catch (e2) { setErr(e2 as ApiError); }
+          }}>{me.organization.environment === "sandbox" ? "운영 조직(실통화)으로 전환" : "시험 조직으로 전환"}</button>
+        </div>
+      )}
       <p className="muted small">이 화면은 정책 값을 기록할 뿐 법률 적합성을 판단하지 않습니다. 허용 시간은 운영 정책이며 법적 허용시간으로 단정하지 않습니다.</p>
       <ErrorBox error={err} />
       {ok && <Notice kind="ok">저장했습니다.</Notice>}
@@ -66,6 +76,18 @@ function Voice({ me }: { me: Me }) {
   const [open, setOpen] = useState<string>("female");
   const admin = me.can.settings;
   const pack = (packs.data ?? []).find((p) => p.key === open);
+  const [busy, setBusy] = useState(false);
+  const [ttsMsg, setTtsMsg] = useState("");
+
+  async function tts(engine: string) {
+    if (!pack) return;
+    setErr(null); setTtsMsg(""); setBusy(true);
+    try {
+      const r = await api.post(`/api/v1/voice-packs/${pack.key}/tts`, { engine });
+      setTtsMsg(r.failed.length ? `일부 실패: ${r.generated}개 생성, ${r.failed.length}개 실패(${r.failed[0].error})` : `완료: ${r.generated}개 생성. 들어 보고 승인하세요.`);
+      packs.reload();
+    } catch (e) { setErr(e as ApiError); } finally { setBusy(false); }
+  }
 
   async function run(fn: () => Promise<any>) {
     setErr(null);
@@ -97,7 +119,22 @@ function Voice({ me }: { me: Me }) {
             {pack.approved_by ? `승인: ${pack.approved_by}` : "승인 전"}
           </p>
           {!pack.dialable && <ul className="detail">{pack.problems.map((x: string) => <li key={x}>{x}</li>)}</ul>}
-          <p className="muted small">‘김태희 실장’은 업무상 안내 역할 이름입니다. 특정 인물의 목소리를 흉내 내지 않고 승인된 녹음만 사용합니다. 녹음은 16비트 모노 WAV입니다.</p>
+          <p className="muted small">‘김태희 실장’은 업무상 안내 역할 이름입니다. 특정 인물의 목소리를 흉내 내지 않고 승인된 녹음만 사용합니다. 녹음 파일은 WAV·MP3·FLAC 을 올리면 자동 변환됩니다.</p>
+          {admin && (
+            <div className="panel tts-box">
+              <h3>자동 음성으로 한 번에 만들기</h3>
+              <p className="muted small">아래 문구 13개와 날짜 조각 43개를 합성 음성으로 만듭니다. 오프닝의 [회사명]은 운영 정책의 회사명으로 바뀝니다.
+                만든 뒤 몇 개를 들어 보고 ‘이 버전 승인’을 눌러야 실제 통화에 쓰입니다.</p>
+              <div className="toolbar">
+                <button className="btn primary" disabled={busy} onClick={() => tts("edge")}>
+                  {busy ? "만드는 중… (1~2분)" : `온라인 음성(${pack.key === "female" ? "여성 SunHi" : "남성 InJoon"})으로 만들기`}
+                </button>
+                <button className="btn" disabled={busy} onClick={() => tts("sapi")}>Windows 내장 음성으로 만들기</button>
+                {me.organization.environment === "sandbox" && <button className="btn ghost" disabled={busy} onClick={() => tts("test")}>시험용 톤으로 채우기</button>}
+              </div>
+              {ttsMsg && <Notice kind={ttsMsg.startsWith("완료") ? "ok" : "warn"}>{ttsMsg}</Notice>}
+            </div>
+          )}
           {admin && (
             <form className="toolbar" onSubmit={(e) => { e.preventDefault(); const n = new FormData(e.currentTarget).get("speaker") as string; run(() => api.put(`/api/v1/voice-packs/${pack.key}`, { speaker_name: n })); }}>
               <input name="speaker" defaultValue={pack.speaker_name} placeholder="안내 인물 이름" aria-label="안내 인물 이름" />
@@ -124,7 +161,7 @@ function Voice({ me }: { me: Me }) {
                       ) : c.text}
                     </td>
                     <td>{c.has_file ? <audio controls preload="none" src={`/api/v1/voice-packs/${pack.key}/clips/${k}`} /> : <span className="unknown">없음</span>}</td>
-                    <td>{admin && <input type="file" accept=".wav" aria-label={`${k} 녹음 올리기`} onChange={(e) => { const f = e.target.files?.[0]; if (f) run(() => api.upload(`/api/v1/voice-packs/${pack.key}/clips/${k}`, f)); }} />}</td>
+                    <td>{admin && <input type="file" accept=".wav,.mp3,.flac" aria-label={`${k} 녹음 올리기`} onChange={(e) => { const f = e.target.files?.[0]; if (f) run(() => api.upload(`/api/v1/voice-packs/${pack.key}/clips/${k}`, f)); }} />}</td>
                   </tr>
                 );
               })}

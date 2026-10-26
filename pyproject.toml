@@ -21,6 +21,8 @@ dev = ["pytest>=8", "ruff>=0.5"]
 # 실시간 음성(실기기/평가용). 기본 설치에서 제외 — 설치 전 라이선스·용량 확인
 voice = ["numpy>=1.26", "sounddevice>=0.4", "faster-whisper>=1.0", "google-genai>=1.0"]
 postgres = ["psycopg[binary]>=3.1"]
+# 안내 음성 자동 생성·음원 변환(온라인 신경망 음성 + MP3/FLAC/WAV 디코더)
+tts = ["edge-tts>=7.0", "miniaudio>=1.60"]
 
 [project.scripts]
 aicc = "aicc_agent.launcher:main"

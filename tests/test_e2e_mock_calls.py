@@ -279,3 +279,13 @@ def test_t19_retention_expiry_purges_recordings_and_transcripts(admin):
         assert texts and all(t == "[보관기간 만료로 삭제]" for t in texts)
     # 연락거부·변경이력 자체는 유지(날짜 값)
     assert admin.get(f"/api/v1/caregivers/{items[0]['caregiver_id']}/changes").json()
+
+
+def test_switch_to_production_blocks_mock_dialing(admin):
+    res, dev, camp, items = setup_mock(admin)
+    assert admin.put("/api/v1/settings", json={"environment": "production"}).status_code == 200
+    agent = make_agent(admin, dev)
+    agent.heartbeat()
+    pf = admin.get(f"/api/v1/campaigns/{camp['campaign_id']}/preflight?device_id={dev['id']}").json()
+    assert not pf["ok"]  # 기존 MOCK 캠페인·단말은 운영 조직에서 시작 불가
+    assert agent.step().status != "CALLED"

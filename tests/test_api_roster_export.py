@@ -168,3 +168,39 @@ def test_csrf_header_required_for_cookie_auth(app_client, admin):
     r = app_client.post("/api/v1/voice-packs/init")
     assert r.status_code == 403 and r.json()["error"]["code"] == "CSRF_HEADER_REQUIRED"
     assert app_client.post("/api/v1/voice-packs/init", headers={"X-AICC": "1"}).status_code == 201
+
+
+def test_voice_pack_auto_created_tts_and_approve(admin):
+    packs = admin.get("/api/v1/voice-packs").json()  # 버튼 없이 자동 생성
+    assert {p["key"] for p in packs} == {"female", "male"}
+    r = admin.post("/api/v1/voice-packs/female/tts", json={"engine": "test"})
+    assert r.status_code == 422 and r.json()["error"]["code"] == "COMPANY_REQUIRED"
+    admin.put("/api/v1/settings", json={"company_name": "좋은케어"})
+    r = admin.post("/api/v1/voice-packs/female/tts", json={"engine": "test"})
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["generated"] == 56 and out["missing_count"] == 0
+    assert "좋은케어" in out["clips"]["opening"]["text"] and "[회사명]" not in out["clips"]["opening"]["text"]
+    assert out["problems"] == ["관리자 승인 기록이 없습니다"]
+    ok = admin.post("/api/v1/voice-packs/female/approve").json()
+    assert ok["dialable"] is True
+    assert admin.get("/api/v1/voice-packs/female/clips/opening").content[:4] == b"RIFF"
+    # 남성 팩은 안내 이름이 없으면 생성 불가
+    assert admin.post("/api/v1/voice-packs/male/tts", json={"engine": "test"}).json()["error"]["code"] == "SPEAKER_REQUIRED"
+
+
+def test_clip_upload_converts_stereo_44k_wav(admin):
+    import wave as _w
+    admin.get("/api/v1/voice-packs")
+    buf = io.BytesIO()
+    with _w.open(buf, "wb") as w:
+        w.setnchannels(2)
+        w.setsampwidth(2)
+        w.setframerate(44100)
+        w.writeframes(b"\x10\x00\x10\x00" * 44100)
+    r = admin.c.post("/api/v1/voice-packs/female/clips/closing", files={"file": ("c.wav", buf.getvalue())},
+                     headers=admin._h())
+    assert r.status_code == 200, r.text
+    data = admin.get("/api/v1/voice-packs/female/clips/closing").content
+    with _w.open(io.BytesIO(data)) as w:
+        assert (w.getnchannels(), w.getframerate()) == (1, 16000)

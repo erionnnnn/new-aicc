@@ -374,6 +374,9 @@ def preflight(db: Session, p: Principal, camp: Campaign, device_id: str | None) 
 
     queued = db.scalar(select(func.count()).select_from(CampaignTarget).where(
         CampaignTarget.campaign_id == camp.id, CampaignTarget.state == "QUEUED")) or 0
+    env_ok = camp.is_mock == (p.org.environment == "sandbox")
+    add("environment", env_ok, "캠페인 종류와 조직 종류 일치",
+        [] if env_ok else ["조직 종류가 바뀌었습니다. 대상 선택에서 캠페인을 새로 만드세요"])
     add("targets", queued > 0, f"발신 대기 대상 {queued}명")
     pack = db.get(VoicePack, camp.voice_pack_id)
     if camp.is_mock:
@@ -440,7 +443,7 @@ def claim_next(db: Session, p: Principal) -> dict:
                      .order_by(Campaign.started_at))
     if camp is None:
         return {"status": "IDLE"}
-    if camp.is_mock != (dev.kind == "mock"):
+    if camp.is_mock != (dev.kind == "mock") or camp.is_mock != (p.org.environment == "sandbox"):
         return {"status": "REFUSED", "message": "캠페인과 단말 종류가 맞지 않습니다"}
     if not camp.is_mock:
         r = device_ready(dev)
