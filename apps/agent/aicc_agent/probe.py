@@ -254,7 +254,11 @@ def main(argv: list[str] | None = None) -> int:
     pu.add_argument("--token", required=True)
     a = ap.parse_args(argv)
     handlers = {"env": cmd_env, "call": cmd_call, "audio": cmd_audio, "upload": cmd_upload, "rx": cmd_rx, None: cmd_env}
-    return handlers[a.cmd](a)
+    try:
+        return handlers[a.cmd](a)
+    except DeviceError as e:
+        print(f"\n[진단 중단] {e}")
+        return 2
 
 
 if __name__ == "__main__":

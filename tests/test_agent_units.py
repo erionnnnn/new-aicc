@@ -22,7 +22,7 @@ class FakeAdb(Adb):
 
     def run(self, *args, timeout=8.0):
         self.calls.append(args)
-        key = " ".join(args[:2])
+        key = " ".join(a.split()[0] for a in args[:2])
         if args[:1] == ("devices",):
             return "List of devices attached\nR58T1 device product:a24 model:SM_A245N\n"
         return self.outputs.get(key, "")
@@ -95,3 +95,33 @@ def test_voicepack_placeholders_block_dialing():
     assert not chk.dialable
     assert any("자리표시자" in p for p in chk.problems)
     assert any("회사명" in p for p in chk.problems)
+
+
+class _CP:
+    def __init__(self, out):
+        self.stdout, self.stderr, self.returncode = out, "", 0
+
+
+@pytest.mark.parametrize("out,msg", [
+    ("List of devices attached\n", "연결된 휴대폰이 없습니다"),
+    ("List of devices attached\nR58T\tunauthorized\n", "허용"),
+    ("List of devices attached\nA\tdevice\nB\tdevice\n", "여러 대"),
+])
+def test_adb_ensure_ready_messages(monkeypatch, out, msg):
+    from aicc_agent.device import DeviceError
+    a = Adb(adb="adb")
+    monkeypatch.setattr(a, "_exec", lambda args, timeout: _CP(out if args[0] == "devices" else ""))
+    with pytest.raises(DeviceError, match=msg):
+        a.run("shell", "getprop", "x")
+
+
+def test_adb_ready_then_runs(monkeypatch):
+    a = Adb(adb="adb")
+    calls = []
+
+    def ex(args, timeout):
+        calls.append(args)
+        return _CP("List of devices attached\nR58T\tdevice\n" if args[0] == "devices" else "SM-A245N")
+    monkeypatch.setattr(a, "_exec", ex)
+    assert a.getprop("ro.product.model") == "SM-A245N"
+    assert calls[0] == ["start-server"] and calls[-1] == ["shell", "getprop", "ro.product.model"]

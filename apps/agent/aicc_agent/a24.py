@@ -39,17 +39,52 @@ class Adb:
         self.adb = adb
         self.serial = serial or os.environ.get("AICC_ADB_SERIAL")
 
+        self._ready = False
+
     def available(self) -> bool:
         return bool(self.adb)
 
-    def run(self, *args: str, timeout: float = 8.0) -> str:
+    def _exec(self, args: list[str], timeout: float) -> subprocess.CompletedProcess:
+        return subprocess.run([self.adb, *args], capture_output=True, text=True, encoding="utf-8", errors="replace",
+                              timeout=timeout, check=False,
+                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+
+    def ensure_ready(self) -> None:
+        """adb 서버 기동(처음엔 수 초 걸림)과 단말 연결·USB 디버깅 허용 상태를 확인한다."""
+        if self._ready:
+            return
+        if not self.adb:
+            raise DeviceError("adb 실행 파일을 찾지 못했습니다(setup.ps1 을 다시 실행하면 tools\\scrcpy\\adb.exe 가 설치됩니다)")
+        try:
+            self._exec(["start-server"], 30)
+            out = self._exec(["devices"], 15).stdout
+        except subprocess.TimeoutExpired as e:
+            raise DeviceError("adb 서버가 응답하지 않습니다. 다른 adb(예: 이전 프로그램, Android Studio)를 모두 끄고 다시 시도하세요") from e
+        states = {ln.split()[0]: ln.split()[1] for ln in out.splitlines()[1:] if len(ln.split()) >= 2}
+        if self.serial:
+            states = {k: v for k, v in states.items() if k == self.serial}
+        if not states:
+            raise DeviceError("연결된 휴대폰이 없습니다. USB 케이블·USB 디버깅(개발자 옵션)을 확인하세요")
+        if "unauthorized" in states.values() and "device" not in states.values():
+            raise DeviceError("휴대폰 화면에 뜬 'USB 디버깅을 허용하시겠습니까?'에서 [허용]을 눌러 주세요")
+        ready = [k for k, v in states.items() if v == "device"]
+        if not ready:
+            raise DeviceError(f"휴대폰 상태가 정상이 아닙니다: {states}")
+        if len(ready) > 1 and not self.serial:
+            raise DeviceError(f"휴대폰이 여러 대 연결되어 있습니다({', '.join(ready)}). AICC_ADB_SERIAL 로 하나를 지정하세요")
+        self._ready = True
+
+    def run(self, *args: str, timeout: float = 15.0) -> str:
         if not self.adb:
             raise DeviceError("adb 실행 파일을 찾지 못했습니다(Android platform-tools 설치 필요)")
-        cmd = [self.adb] + (["-s", self.serial] if self.serial else []) + list(args)
+        if args and args[0] not in ("devices", "start-server", "kill-server", "version"):
+            self.ensure_ready()
+        cmd = (["-s", self.serial] if self.serial else []) + list(args)
         try:
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
+            r = self._exec(cmd, timeout)
         except subprocess.TimeoutExpired as e:
-            raise DeviceError(f"adb 응답 없음: {' '.join(args[:2])}") from e
+            self._ready = False
+            raise DeviceError(f"adb 응답 없음({timeout:.0f}초): {' '.join(args[:2])} — 휴대폰 연결·잠금 상태를 확인하세요") from e
         if r.returncode != 0:
             raise DeviceError(f"adb 오류({r.returncode}): {r.stderr.strip()[:200]}")
         return r.stdout
@@ -203,7 +238,8 @@ class A24Device(DeviceAdapter):
             self._stop_rx()
 
     def get_call_state(self) -> CallStatus:
-        out = self.adb.run("shell", "dumpsys", "telephony.registry", timeout=5)
+        # 출력이 큰 dumpsys 를 단말에서 걸러 받아 시간을 줄인다
+        out = self.adb.run("shell", "dumpsys telephony.registry | grep -iE 'mCallState|call state'", timeout=15)
         m = _PRECISE.search(out)
         legacy = _CALLSTATE.search(out)
         detail = {"legacy": int(legacy.group(1)) if legacy else None}
