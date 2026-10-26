@@ -55,10 +55,19 @@ def build_agent(env: dict[str, str], base: str):  # noqa: ANN201
                          base=base)
     if kind == "mock":
         return Agent(client, MockDevice(), make_stt("mock"), make_ai("mock"))
-    route = None
-    if env.get("AICC_RX_DEVICE") and env.get("AICC_TX_DEVICE"):
+    from .scrcpy_rx import ScrcpyRx, TxOutput
+
+    serial = env.get("AICC_ADB_SERIAL") or None
+    rx = tx = route = None
+    if env.get("AICC_RX_MODE", "scrcpy") == "scrcpy":
+        # 상대 음성은 scrcpy(voice-call-downlink)로 USB 수신, PC 재생 없음
+        rx = ScrcpyRx(serial=serial, scrcpy=env.get("AICC_SCRCPY") or None,
+                      source=env.get("AICC_SCRCPY_SOURCE") or None, workdir=data / "tmp")
+        if env.get("AICC_TX_DEVICE"):
+            tx = TxOutput(env["AICC_TX_DEVICE"])
+    elif env.get("AICC_RX_DEVICE") and env.get("AICC_TX_DEVICE"):
         route = AudioRoute(env["AICC_RX_DEVICE"], env["AICC_TX_DEVICE"])
-    dev = A24Device(Adb(serial=env.get("AICC_ADB_SERIAL")), route, state_file=data / "probe_state.json")
+    dev = A24Device(Adb(serial=serial), route, state_file=data / "probe_state.json", rx=rx, tx=tx)
     return Agent(client, dev, make_stt(env.get("AICC_STT_ENGINE", "none")),
                  make_ai(env.get("AICC_AI", "gemini-live")))
 

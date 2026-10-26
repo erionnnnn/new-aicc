@@ -6,7 +6,8 @@
 사용 예
   aicc-probe env                                   # 환경 수집(adb·기기·Android·통신사·오디오 장치)
   aicc-probe call --number 010XXXXXXXX --approved  # 승인된 시험 번호로 발신·응답감지·종료 확인
-  aicc-probe audio --number 010XXXXXXXX --rx 3 --tx 5 --approved   # RX 녹음·TX 송출 시험
+  aicc-probe rx --number 010XXXXXXXX --approved     # scrcpy 로 상대 음성(RX) 수신 시험
+  aicc-probe audio --number 010XXXXXXXX --rx 3 --tx 5 --approved   # 사운드카드 RX 녹음·TX 송출 시험
   aicc-probe upload --server http://127.0.0.1:8765 --token <장치토큰>
 """
 
@@ -16,14 +17,16 @@ import argparse
 import json
 import os
 import platform
+import subprocess
 import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 from .a24 import A24Device, Adb, AudioRoute
-from .audio import read_wav_mono16, split_frames, tone, wav_bytes
+from .audio import read_wav_mono16, rms, split_frames, tone, wav_bytes
 from .device import DeviceError
+from .scrcpy_rx import ScrcpyRx, scrcpy_path
 
 DATA = Path(os.environ.get("AICC_DATA_DIR", ".aicc"))
 REPORT = DATA / "probe_report.json"
@@ -98,7 +101,19 @@ def collect_env(adb: Adb | None = None) -> dict:
     except Exception as e:  # noqa: BLE001
         rep["audio_devices"] = None
         rep["unknowns"].append(f"오디오 장치 목록 확인 불가({type(e).__name__}) — `pip install .[voice]` 필요")
-    rep["unknowns"].append("USB 케이블만으로 통화 음성 RX/TX 가능 여부: 미검증(공식 문서상 USB 디버깅은 오디오 미제공)")
+    sc = scrcpy_path()
+    if sc:
+        try:
+            out = subprocess.run([sc, "--version"], capture_output=True, text=True, timeout=10).stdout
+            rep["scrcpy"] = {"path": sc, "version": out.splitlines()[0] if out else None}
+            rep["facts"].append(f"scrcpy 발견: {rep['scrcpy']['version']}")
+        except (OSError, subprocess.TimeoutExpired) as e:
+            rep["scrcpy"] = {"path": sc, "error": type(e).__name__}
+    else:
+        rep["scrcpy"] = None
+        rep["unknowns"].append("scrcpy 미설치 — RX(상대 음성) 수신에 필요. AICC_SCRCPY 로 경로 지정 가능")
+    rep["unknowns"].append("RX: scrcpy voice-call-downlink 로 수신 가능 여부는 `aicc-probe rx` 로 확인")
+    rep["unknowns"].append("TX: scrcpy 는 송신 미지원 — PC→통화 송출 경로 미검증")
     return rep
 
 
@@ -173,6 +188,35 @@ def cmd_audio(a: argparse.Namespace) -> int:  # pragma: no cover - 실기기 필
     return 0
 
 
+def cmd_rx(a: argparse.Namespace) -> int:  # pragma: no cover - 실기기 필요
+    """scrcpy 로 통화 수신 음성(RX)만 녹음해 확인한다. PC 스피커로는 재생하지 않는다."""
+    _require_approval(a)
+    rx = ScrcpyRx(source=a.source, workdir=DATA / "tmp")
+    dev = A24Device(Adb(), rx=rx)
+    if dev.get_call_state().state != "IDLE":
+        print("단말이 IDLE 이 아닙니다. 진행하지 않습니다.")
+        return 1
+    dev.dial(a.number)
+    input("원격 단말에서 전화를 받은 뒤 Enter 를 누르세요. 원격 청취자는 시험 문장 10개를 읽어 주세요...")
+    frames = []
+    t0 = time.monotonic()
+    while time.monotonic() - t0 < a.seconds:
+        frames += dev.read_rx_frames(500)
+        print(f"\r수신 {len(frames) * 20 / 1000:5.1f}초", end="")
+    dev.hangup()
+    pcm = b"".join(f.pcm for f in frames)
+    out = DATA / f"probe_rx_scrcpy_{int(time.time())}.wav"
+    out.write_bytes(wav_bytes(pcm))
+    loud = sum(1 for f in frames if rms(f.pcm) > 300)
+    print(f"\n저장: {out}  (소리 있는 구간 {loud * 20 / 1000:.1f}초 / 전체 {len(frames) * 20 / 1000:.1f}초)")
+    state = _load(STATE)
+    state["rx_audio_ok"] = loud > 0 and _ask("저장된 파일을 헤드셋으로 들어 보니 원격 문장이 또렷하게 들립니까?")
+    state["rx_mode"] = f"scrcpy:{a.source}"
+    state["rx_tested_at"] = _now()
+    _save(STATE, state)
+    return 0
+
+
 def cmd_upload(a: argparse.Namespace) -> int:
     import httpx
 
@@ -200,11 +244,16 @@ def main(argv: list[str] | None = None) -> int:
     pa.add_argument("--clip", help="송출할 16bit mono WAV(없으면 시험 톤)")
     pa.add_argument("--seconds", type=int, default=20)
     pa.add_argument("--approved", action="store_true")
+    pr = sub.add_parser("rx", help="scrcpy 로 통화 수신 음성(RX) 시험")
+    pr.add_argument("--number", required=True)
+    pr.add_argument("--seconds", type=int, default=20)
+    pr.add_argument("--source", default="voice-call-downlink")
+    pr.add_argument("--approved", action="store_true")
     pu = sub.add_parser("upload", help="진단 결과 서버 업로드")
     pu.add_argument("--server", default="http://127.0.0.1:8765")
     pu.add_argument("--token", required=True)
     a = ap.parse_args(argv)
-    handlers = {"env": cmd_env, "call": cmd_call, "audio": cmd_audio, "upload": cmd_upload, None: cmd_env}
+    handlers = {"env": cmd_env, "call": cmd_call, "audio": cmd_audio, "upload": cmd_upload, "rx": cmd_rx, None: cmd_env}
     return handlers[a.cmd](a)
 
 

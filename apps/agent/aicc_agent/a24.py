@@ -117,17 +117,26 @@ class AudioRoute:  # pragma: no cover - 실기기·사운드카드 필요
 
 
 class A24Device(DeviceAdapter):
+    """rx: ScrcpyRx(권장, USB) 또는 AudioRoute / tx: TxOutput 또는 AudioRoute.
+    route 하나만 주면 RX·TX 모두 그 장치를 쓴다(이전 방식 호환)."""
+
     kind = "a24"
 
-    def __init__(self, adb: Adb | None = None, route: AudioRoute | None = None, state_file: Path | None = None):
+    def __init__(self, adb: Adb | None = None, route: AudioRoute | None = None, state_file: Path | None = None,
+                 *, rx=None, tx=None):  # noqa: ANN001
         self.adb = adb or Adb()
         self.route = route
+        self.rx = rx if rx is not None else route
+        self.tx = tx if tx is not None else route
         self.state_file = state_file
         self._t0 = time.monotonic()
         self._precise_seen = False
+        self._rx_running = False
 
     def now_ms(self) -> int:
-        return self.route.now_ms() if self.route else int((time.monotonic() - self._t0) * 1000)
+        if self.rx is not None and hasattr(self.rx, "now_ms"):
+            return self.rx.now_ms()
+        return int((time.monotonic() - self._t0) * 1000)
 
     def _probe_state(self) -> dict:
         if self.state_file and self.state_file.is_file():
@@ -155,22 +164,40 @@ class A24Device(DeviceAdapter):
         for k in ("dial", "hangup", "answer_detection"):
             if ps.get(f"{k}_ok") is True:
                 caps[k] = "supported"
-        if self.route is None:
-            caps["rx_audio"] = caps["tx_audio"] = caps["recording"] = "unsupported"
-        else:
-            for k in ("rx_audio", "tx_audio", "recording"):
-                if ps.get(f"{k}_ok") is True:
-                    caps[k] = "supported"
+        caps["rx_audio"] = "unsupported" if self.rx is None else ("supported" if ps.get("rx_audio_ok") else "unknown")
+        caps["tx_audio"] = "unsupported" if self.tx is None else ("supported" if ps.get("tx_audio_ok") else "unknown")
+        if self.rx is None or self.tx is None:
+            caps["recording"] = "unsupported"
+        elif ps.get("recording_ok"):
+            caps["recording"] = "supported"
         return caps
+
+    def _start_rx(self) -> None:
+        if self.rx is not None and hasattr(self.rx, "start") and not self._rx_running:
+            self.rx.start()  # 발신 직후 시작해 상대 첫마디를 놓치지 않게 한다
+            self._rx_running = True
+
+    def _stop_rx(self) -> None:
+        if self.rx is not None and hasattr(self.rx, "stop") and self._rx_running:
+            self.rx.stop()
+        self._rx_running = False
 
     def dial(self, number: str) -> str:
         if not re.fullmatch(r"0\d{8,10}", number):
             raise DeviceError("발신 번호 형식 오류")
         self.adb.run("shell", "am", "start", "-a", "android.intent.action.CALL", "-d", f"tel:{number}")
+        try:
+            self._start_rx()
+        except DeviceError:
+            self.adb.run("shell", "input", "keyevent", "KEYCODE_ENDCALL")
+            raise
         return f"adb-dial-{int(time.time())}"
 
     def hangup(self) -> None:
-        self.adb.run("shell", "input", "keyevent", "KEYCODE_ENDCALL")
+        try:
+            self.adb.run("shell", "input", "keyevent", "KEYCODE_ENDCALL")
+        finally:
+            self._stop_rx()
 
     def get_call_state(self) -> CallStatus:
         out = self.adb.run("shell", "dumpsys", "telephony.registry", timeout=5)
@@ -188,14 +215,17 @@ class A24Device(DeviceAdapter):
         return CallStatus("UNKNOWN", detail)
 
     def read_rx_frames(self, max_ms: int) -> list[Frame]:
-        if self.route is None:
+        if self.rx is None:
             raise DeviceUnverified("RX 오디오 경로가 지정·검증되지 않았습니다")
-        return self.route.read(max_ms)
+        if hasattr(self.rx, "start") and not self._rx_running:
+            time.sleep(max_ms / 1000)  # 통화 밖(종료 확인 대기 등): 캡처 없이 대기만
+            return []
+        return self.rx.read(max_ms)
 
     def write_tx_frames(self, frames: list[Frame]) -> int:
-        if self.route is None:
-            raise DeviceUnverified("TX 오디오 경로가 지정·검증되지 않았습니다")
-        return self.route.write(frames)
+        if self.tx is None:
+            raise DeviceUnverified("TX 오디오 경로가 지정·검증되지 않았습니다(scrcpy 는 송신을 지원하지 않음)")
+        return self.tx.write(frames)
 
     def tx_segment_done(self, label: str) -> None:
         pass

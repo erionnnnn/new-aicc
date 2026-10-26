@@ -94,8 +94,9 @@ def test_t03_export_preserves_rows_values_and_sheets(admin):
 
 
 def test_reupload_duplicate_warning_and_db_date_kept(admin):
-    upload_commit(admin, clean_roster_bytes())
-    r = _upload(admin, "same.xlsx", clean_roster_bytes())
+    data = clean_roster_bytes()  # 같은 파일(바이트 동일) — 생성 시각이 바뀌지 않게 한 번만 만든다
+    upload_commit(admin, data)
+    r = _upload(admin, "same.xlsx", data)
     assert r.json()["duplicate_of"] is not None
 
 
