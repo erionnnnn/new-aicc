@@ -298,13 +298,14 @@ function PilotPanel({ me }: { me: Me }) {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     setErr(null); setMsg("");
-    const key = String(f.get("gkey") || "");
+    const key = f.get("gclear") === "on" ? "" : String(f.get("gkey") || "").trim();
+    const keyChanged = f.get("gclear") === "on" || key.length > 0;
     try {
       await api.put("/api/v1/local-agent", {
         whisper_model: f.get("wmodel"), tx_device: f.get("tx") ?? "", gemini_model: f.get("gmodel") ?? "",
         uplink_jar: String(f.get("jar") ?? "").trim(), tx_adb_target: String(f.get("txt") ?? "").trim(), tx_rate: f.get("txr"), tx_channels: f.get("txc"),
         tx_start_cmd: String(f.get("txs") ?? "").trim(),
-        ...(key ? { gemini_api_key: key } : {}),
+        ...(keyChanged ? { gemini_api_key: key } : {}),
       });
       setMsg("에이전트 설정을 저장했습니다. 몇 초 뒤 에이전트가 다시 시작됩니다."); la.reload();
     } catch (e2) { setErr(e2 as ApiError); }
@@ -358,8 +359,16 @@ function PilotPanel({ me }: { me: Me }) {
               ) : <input name="tx" defaultValue={a.tx_device} placeholder="장치 목록을 읽지 못했습니다" />}
             </Field>
             <div />
-            <Field label="Gemini Live 모델명(예외 질문용, 선택)"><input name="gmodel" defaultValue={a.gemini_model} placeholder="공식 문서의 Live 모델명" /></Field>
-            <Field label={`Gemini API 키${a.has_gemini_key ? " (저장됨 — 바꿀 때만 입력)" : ""}`}><input name="gkey" type="password" autoComplete="off" /></Field>
+            <Field label="Gemini Live 모델명(예외 질문용, 선택)" hint="gemini 로 시작하는 모델명만 저장됩니다(브라우저 자동완성 주의)">
+              <input name="gmodel" defaultValue={a.gemini_model} placeholder="gemini-..." autoComplete="off" data-lpignore="true" data-1p-ignore />
+            </Field>
+            <Field label={`Gemini API 키${a.has_gemini_key ? " (저장됨 — 바꿀 때만 입력)" : ""}`}>
+              <input name="gkey" type="text" autoComplete="off" spellCheck={false} data-lpignore="true" data-1p-ignore
+                     style={{ WebkitTextSecurity: "disc" } as any} placeholder="AIza..." />
+            </Field>
+            {a.has_gemini_key && (
+              <label className="inline"><input type="checkbox" name="gclear" /> 저장된 Gemini 키 삭제</label>
+            )}
           </div>
           <p className="muted small">키가 없으면 예외 질문은 ‘상담 요청’으로 넘기고 날짜는 저장하지 않습니다. 키는 이 PC의 .aicc 폴더에만 저장되며 화면에 다시 표시하지 않습니다.</p>
           <div className="actions"><button className="btn">에이전트 설정 저장</button></div>

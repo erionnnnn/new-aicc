@@ -42,9 +42,11 @@ class MockSTT(STTAdapter):
 class FasterWhisperSTT(STTAdapter):  # pragma: no cover - 선택 의존성, 실기기 평가 필요
     name = "faster-whisper"
 
-    def __init__(self, model: str | None = None, device: str = "auto", compute_type: str = "int8"):
+    def __init__(self, model: str | None = None, device: str | None = None, compute_type: str = "int8"):
         from faster_whisper import WhisperModel  # 지연 import
 
+        # 기본 CPU: GPU 가 있어도 CUDA/cuDNN DLL 이 없으면 실패하므로 명시적으로 지정할 때만 GPU 사용
+        device = device or os.environ.get("AICC_WHISPER_DEVICE", "cpu")
         self.model = WhisperModel(model or os.environ.get("AICC_WHISPER_MODEL", "small"), device=device,
                                   compute_type=compute_type)  # 처음 실행 시 모델을 내려받는다(수백 MB)
 

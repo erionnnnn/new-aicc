@@ -79,7 +79,8 @@ def build_agent(env: dict[str, str], base: str):  # noqa: ANN201
     from .ai import FailingAI
 
     stt = make_stt(env.get("AICC_STT_ENGINE") or "faster-whisper")
-    if env.get("GEMINI_API_KEY") and env.get("AICC_GEMINI_MODEL"):
+    gm = (env.get("AICC_GEMINI_MODEL") or "").strip()
+    if env.get("GEMINI_API_KEY") and gm.removeprefix("models/").startswith("gemini"):
         os.environ["GEMINI_API_KEY"] = env["GEMINI_API_KEY"]
         os.environ["AICC_GEMINI_MODEL"] = env["AICC_GEMINI_MODEL"]
         ai = make_ai("gemini-live")
@@ -105,8 +106,12 @@ def supervise_agent(env_file: Path, base: str, stop: threading.Event) -> None:  
                 try:
                     agent = build_agent(env, base)
                 except Exception as e:  # noqa: BLE001
-                    log.error("에이전트 시작 실패: %s", e)
-                    (env_file.parent / "agent_status.txt").write_text(f"ERROR {type(e).__name__}: {e}", encoding="utf-8")
+                    import traceback
+                    tb = traceback.extract_tb(e.__traceback__)
+                    where = " ← ".join(f"{Path(f.filename).name}:{f.lineno}" for f in tb[-3:][::-1])
+                    log.exception("에이전트 시작 실패")
+                    (env_file.parent / "agent_status.txt").write_text(
+                        f"ERROR {type(e).__name__}: {e} [{where}]", encoding="utf-8")
                     current = None
                 else:
                     current = threading.Thread(target=agent.run_forever, args=(agent_stop,), daemon=True,

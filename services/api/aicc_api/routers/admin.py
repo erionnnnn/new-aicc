@@ -503,7 +503,7 @@ class LocalAgentIn(BaseModel):
     stt_engine: str | None = Field(default=None, pattern="^(faster-whisper)$")
     whisper_model: str | None = Field(default=None, pattern="^(tiny|base|small|medium|large-v3|large-v3-turbo)$")
     tx_device: str | None = Field(default=None, max_length=200)
-    gemini_model: str | None = Field(default=None, max_length=100)
+    gemini_model: str | None = Field(default=None, max_length=100, pattern=r"^$|^(models/)?gemini[A-Za-z0-9_.\-]*$")
     gemini_api_key: str | None = Field(default=None, max_length=200)  # 빈 문자열이면 삭제, None 이면 유지
     tx_adb_target: str | None = Field(default=None, max_length=140,
                                 pattern=r"^$|^(tcp:[0-9]+|localabstract:[A-Za-z0-9_.\-]+|localfilesystem:[A-Za-z0-9_./\-]+)$")
