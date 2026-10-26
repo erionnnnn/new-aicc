@@ -290,9 +290,11 @@ def create_campaign(db: Session, p: Principal, *, batch_id: str, caregiver_ids: 
         raise AppError(422, "DUPLICATE_TARGETS", "같은 대상이 중복 선택되었습니다")
     batch_cg = {r.caregiver_id: r for r in db.scalars(select(ImportRow).where(
         ImportRow.batch_id == batch.id, ImportRow.caregiver_id.is_not(None))).all()}
+    pilot = pilot_enabled(p.org)
+    tests = test_number_hashes(p.org) if pilot else set()
     camp = Campaign(organization_id=p.org.id, batch_id=batch.id, name=(name or batch.file_name)[:200],
                     voice_pack_id=pack.id, voice_pack_digest=pack.digest, is_mock=p.org.environment == "sandbox",
-                    created_by=p.id)
+                    pilot=pilot, created_by=p.id)
     db.add(camp)
     db.flush()
     accepted, excluded = 0, []
@@ -312,6 +314,8 @@ def create_campaign(db: Session, p: Principal, *, batch_id: str, caregiver_ids: 
             reason = "BLOCKED"
         elif cg.phone_hash in seen_phones:
             reason = "DUPLICATE_PHONE"
+        elif pilot and cg.phone_hash not in tests:
+            reason = "NOT_TEST_NUMBER"  # 실통화 시험 모드: 등록한 시험 번호 외 발신 금지
         if reason:
             excluded.append({"caregiver_id": cid, "reason": reason})
             continue
@@ -319,10 +323,13 @@ def create_campaign(db: Session, p: Principal, *, batch_id: str, caregiver_ids: 
         db.add(CampaignTarget(campaign_id=camp.id, caregiver_id=cid, order_no=i))
         accepted += 1
     if accepted == 0:
-        raise AppError(422, "NO_DIALABLE_TARGETS", "발신 가능한 대상이 없습니다", {"excluded": excluded})
+        msg = "발신 가능한 대상이 없습니다"
+        if pilot and any(e["reason"] == "NOT_TEST_NUMBER" for e in excluded):
+            msg += " — 실통화 시험 모드에서는 설정에 등록한 시험 번호로만 걸 수 있습니다"
+        raise AppError(422, "NO_DIALABLE_TARGETS", msg, {"excluded": excluded})
     audit(db, p, "campaign.create", "campaign", camp.id, {"accepted": accepted, "excluded": len(excluded)})
     return {"campaign_id": camp.id, "accepted_count": accepted, "excluded_targets": excluded,
-            "is_mock": camp.is_mock}
+            "is_mock": camp.is_mock, "pilot": camp.pilot}
 
 
 def device_ready(dev: Device) -> dict:
@@ -346,6 +353,20 @@ def device_ready(dev: Device) -> dict:
         if not proof.get(k):
             reasons.append(f"미검증: {label}")
     return {"connected": connected, "real_call_ready": not reasons, "mock": False, "reasons": reasons}
+
+
+def pilot_enabled(org: Organization) -> bool:
+    return org.environment == "production" and bool((org.policies or {}).get("pilot_enabled"))
+
+
+def test_number_hashes(org: Organization) -> set[str]:
+    from aicc_core.phone import normalize_phone
+    out = set()
+    for raw in (org.policies or {}).get("test_numbers") or []:
+        r = normalize_phone(str(raw))
+        if r.ok:
+            out.add(phone_hmac(org.id, r.normalized))
+    return out
 
 
 def policy_problems(org: Organization) -> list[str]:
@@ -384,8 +405,17 @@ def preflight(db: Session, p: Principal, camp: Campaign, device_id: str | None) 
     else:
         pc = check_pack(pack.manifest, packs_dir(p.org.id)) if pack else None
         add("voice", bool(pc and pc.dialable), "회사명·음원 준비", pc.problems if pc else ["음원팩 없음"])
-        pol = policy_problems(p.org)
-        add("policy", not pol, "운영 정책(보관·허용시간·고지·AI 전송)", pol)
+        if camp.pilot:
+            tests = test_number_hashes(p.org)
+            bad = db.scalar(select(func.count()).select_from(CampaignTarget).join(
+                Caregiver, Caregiver.id == CampaignTarget.caregiver_id).where(
+                CampaignTarget.campaign_id == camp.id, CampaignTarget.state == "QUEUED",
+                Caregiver.phone_hash.not_in(tests or {"-"}))) or 0
+            add("pilot", pilot_enabled(p.org) and bad == 0, "실통화 시험: 대상 전원이 등록된 시험 번호",
+                [] if bad == 0 else [f"시험 번호가 아닌 대상 {bad}명"] if pilot_enabled(p.org) else ["시험 모드가 꺼졌습니다"])
+        else:
+            pol = policy_problems(p.org)
+            add("policy", not pol, "운영 정책(보관·허용시간·고지·AI 전송)", pol)
     dev = db.get(Device, device_id) if device_id else None
     if dev is None or dev.organization_id != p.org.id:
         add("device", False, "단말 선택", ["단말을 선택하세요"])
@@ -395,6 +425,12 @@ def preflight(db: Session, p: Principal, camp: Campaign, device_id: str | None) 
             ok = dev.kind == "mock" and r["connected"]
             add("device", ok, "MOCK 에이전트 연결", r["reasons"] if dev.kind == "mock" else
                 ["시험 조직에서는 MOCK 단말만 사용할 수 있습니다"])
+        elif camp.pilot:
+            caps = dev.capabilities or {}
+            ok = dev.kind == "a24" and r["connected"] and caps.get("dial") != "unsupported"
+            detail = [] if ok else (["A24 에이전트 연결 신호가 없습니다(USB·AICC 실행 확인)"] if dev.kind == "a24"
+                                    else ["A24 단말을 선택하세요"])
+            add("device", ok, "A24 연결(시험 모드: 실통화 검증 기록 없이 시험 번호만)", detail)
         else:
             ok = dev.kind == "a24" and r["real_call_ready"]
             add("device", ok, "A24 실통화 검증 유효", r["reasons"] if dev.kind == "a24" else
@@ -405,7 +441,7 @@ def preflight(db: Session, p: Principal, camp: Campaign, device_id: str | None) 
                                                  Campaign.id != camp.id))
         add("exclusive", other is None, "같은 단말의 다른 진행 캠페인 없음",
             [f"진행 중 캠페인: {other.name}"] if other else [])
-    return {"ok": all(c["ok"] for c in checks), "checks": checks, "is_mock": camp.is_mock}
+    return {"ok": all(c["ok"] for c in checks), "checks": checks, "is_mock": camp.is_mock, "pilot": camp.pilot}
 
 
 def get_campaign(db: Session, p: Principal, cid: str) -> Campaign:
@@ -445,7 +481,11 @@ def claim_next(db: Session, p: Principal) -> dict:
         return {"status": "IDLE"}
     if camp.is_mock != (dev.kind == "mock") or camp.is_mock != (p.org.environment == "sandbox"):
         return {"status": "REFUSED", "message": "캠페인과 단말 종류가 맞지 않습니다"}
-    if not camp.is_mock:
+    if camp.pilot:
+        if not pilot_enabled(p.org):
+            camp.state = "PAUSED"
+            return {"status": "REFUSED", "message": "실통화 시험 모드가 꺼져 있습니다"}
+    elif not camp.is_mock:
         r = device_ready(dev)
         if not r["real_call_ready"]:
             camp.state = "PAUSED"
@@ -465,7 +505,11 @@ def claim_next(db: Session, p: Principal) -> dict:
                 camp.ended_at = utcnow()
             return {"status": "IDLE"}
         cg = db.get(Caregiver, tgt.caregiver_id)
-        # 발신권 획득 직전 연락거부 재확인(설계 09)
+        # 발신권 획득 직전 연락거부 재확인(설계 09), 시험 모드는 시험 번호 재확인
+        if camp.pilot and (cg is None or cg.phone_hash not in test_number_hashes(p.org)):
+            tgt.state = "CANCELLED"
+            tgt.last_outcome = "NOT_TEST_NUMBER"
+            continue
         if cg is None or active_block(db, p.org.id, cg.phone_hash):
             tgt.state = "BLOCKED"
             tgt.last_outcome = "REFUSED"
@@ -482,7 +526,7 @@ def claim_next(db: Session, p: Principal) -> dict:
     dev.lease_expires_at = utcnow() + timedelta(seconds=LEASE_SECONDS)
     audit(db, p, "call.claim", "call", call.id, {"campaign_id": camp.id})
     return {
-        "status": "CALL", "call_id": call.id, "campaign_id": camp.id, "is_mock": camp.is_mock,
+        "status": "CALL", "call_id": call.id, "campaign_id": camp.id, "is_mock": camp.is_mock, "pilot": camp.pilot,
         "caregiver": {"id": cg.id, "name": cg.name, "external_no": cg.external_no},
         "phone": decrypt(cg.phone_enc).decode() if cg.phone_enc else None,
         "voice_pack": {"id": pack.id, "digest": pack.digest, "manifest": pack.manifest},

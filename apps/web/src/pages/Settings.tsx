@@ -275,6 +275,85 @@ function Devices({ me }: { me: Me }) {
   );
 }
 
+function PilotPanel({ me }: { me: Me }) {
+  const st = useAsync(() => api.get<any>("/api/v1/settings"));
+  const la = useAsync(() => api.get<any>("/api/v1/local-agent").catch(() => null), [], 5000);
+  const [err, setErr] = useState<ApiError | null>(null);
+  const [msg, setMsg] = useState("");
+  if (!me.can.settings || !st.data) return null;
+  const pol = st.data.policies;
+  const prod = me.organization.environment === "production";
+  const a = la.data;
+
+  async function savePilot(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    setErr(null); setMsg("");
+    try {
+      await api.put("/api/v1/settings", { policies: { pilot_enabled: f.get("pilot") === "on", test_numbers: String(f.get("numbers") || "") } });
+      setMsg("시험 모드 설정을 저장했습니다."); st.reload();
+    } catch (e2) { setErr(e2 as ApiError); }
+  }
+  async function saveAgent(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    setErr(null); setMsg("");
+    const key = String(f.get("gkey") || "");
+    try {
+      await api.put("/api/v1/local-agent", {
+        whisper_model: f.get("wmodel"), tx_device: f.get("tx") ?? "", gemini_model: f.get("gmodel") ?? "",
+        ...(key ? { gemini_api_key: key } : {}),
+      });
+      setMsg("에이전트 설정을 저장했습니다. 몇 초 뒤 에이전트가 다시 시작됩니다."); la.reload();
+    } catch (e2) { setErr(e2 as ApiError); }
+  }
+
+  return (
+    <div className="panel pilot">
+      <h2>실통화 시험 모드</h2>
+      <p className="muted small">실기기 검증 기록(10회) 전이라도, 아래 등록한 <strong>시험 번호로만</strong> 웹에서 캠페인을 돌려 실제 통화를 시험합니다.
+        다른 번호는 캠페인 생성·발신 직전에 모두 제외됩니다. 시험 통화 결과는 검수 대상으로 남습니다.</p>
+      {!prod && <Notice kind="warn">운영 정책 탭에서 ‘운영 조직(실통화)으로 전환’을 먼저 하세요. 시험 조직에서는 MOCK 통화만 됩니다.</Notice>}
+      <form onSubmit={savePilot}>
+        <label className="inline"><input type="checkbox" name="pilot" defaultChecked={!!pol.pilot_enabled} /> 실통화 시험 모드 켜기</label>
+        <Field label="시험 번호(한 줄에 하나, 최대 20개)" hint="동의한 직원 휴대폰만 넣으세요. 명부에도 이 번호가 있어야 대상 선택에서 고를 수 있습니다.">
+          <textarea name="numbers" rows={3} defaultValue={(pol.test_numbers ?? []).join("\n")} placeholder="010-0000-0000" />
+        </Field>
+        <div className="actions"><button className="btn primary">시험 모드 저장</button></div>
+      </form>
+
+      <h3>이 PC 에이전트</h3>
+      {a === null ? <p className="muted">AICC 아이콘(통합 실행 프로그램)으로 실행했을 때만 설정할 수 있습니다.</p> : a && (
+        <form onSubmit={saveAgent}>
+          <p className="small">상태: {a.status ? (a.status.startsWith("OK") ? <span className="badge ok">실행 중 ({a.status.slice(3)})</span> : <span className="badge danger">{a.status}</span>) : <span className="badge muted">단말 미연결</span>}</p>
+          <div className="grid3">
+            <Field label="음성 인식(faster-whisper) 모델" hint="small 권장. 처음 통화 때 모델을 내려받아 1~2분 걸립니다">
+              <select name="wmodel" defaultValue={a.whisper_model}>
+                {["tiny", "base", "small", "medium", "large-v3-turbo"].map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </Field>
+            <Field label="안내 음성 송신(TX) 출력 장치" hint="없으면 시험 모드에서 안내 음성 없이 흐름만 시험합니다">
+              {a.output_devices ? (
+                <select name="tx" defaultValue={a.tx_device}>
+                  <option value="">없음(송신 안 함)</option>
+                  {a.output_devices.map((d: any) => <option key={d.index} value={d.name} disabled={d.is_default}>{d.name}{d.is_default ? " (PC 기본 출력 — 사용 불가)" : ""}</option>)}
+                </select>
+              ) : <input name="tx" defaultValue={a.tx_device} placeholder="장치 목록을 읽지 못했습니다" />}
+            </Field>
+            <div />
+            <Field label="Gemini Live 모델명(예외 질문용, 선택)"><input name="gmodel" defaultValue={a.gemini_model} placeholder="공식 문서의 Live 모델명" /></Field>
+            <Field label={`Gemini API 키${a.has_gemini_key ? " (저장됨 — 바꿀 때만 입력)" : ""}`}><input name="gkey" type="password" autoComplete="off" /></Field>
+          </div>
+          <p className="muted small">키가 없으면 예외 질문은 ‘상담 요청’으로 넘기고 날짜는 저장하지 않습니다. 키는 이 PC의 .aicc 폴더에만 저장되며 화면에 다시 표시하지 않습니다.</p>
+          <div className="actions"><button className="btn">에이전트 설정 저장</button></div>
+        </form>
+      )}
+      <ErrorBox error={err} />
+      {msg && <Notice kind="ok">{msg}</Notice>}
+    </div>
+  );
+}
+
 function Users({ me }: { me: Me }) {
   const list = useAsync(() => api.get<any[]>("/api/v1/users"));
   const [err, setErr] = useState<ApiError | null>(null);
@@ -341,7 +420,7 @@ export default function SettingsPage({ me, tab, onChanged }: { me: Me; tab: stri
       </div>
       {tab === "policy" && <Policy me={me} onChanged={onChanged} />}
       {tab === "voice" && <Voice me={me} />}
-      {tab === "devices" && <Devices me={me} />}
+      {tab === "devices" && <><PilotPanel me={me} /><Devices me={me} /></>}
       {tab === "users" && <Users me={me} />}
       {tab === "audit" && <Audit />}
     </Page>

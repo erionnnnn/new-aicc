@@ -289,3 +289,40 @@ def test_switch_to_production_blocks_mock_dialing(admin):
     pf = admin.get(f"/api/v1/campaigns/{camp['campaign_id']}/preflight?device_id={dev['id']}").json()
     assert not pf["ok"]  # 기존 MOCK 캠페인·단말은 운영 조직에서 시작 불가
     assert agent.step().status != "CALLED"
+
+
+def test_pilot_mode_calls_only_registered_test_numbers(admin):
+    """운영 조직 + 실통화 시험 모드: 실기기 검증 기록 없이도 등록한 시험 번호로만 발신."""
+    rows = [["00801", "시험직원", "010-8000-0001", None, "", ""], ["00802", "실제간병사", "010-8000-0002", None, "", ""]]
+    admin.put("/api/v1/settings", json={"company_name": "좋은케어"})
+    admin.get("/api/v1/voice-packs")
+    admin.post("/api/v1/voice-packs/female/tts", json={"engine": "test"})
+    pack = admin.post("/api/v1/voice-packs/female/approve").json()
+    assert admin.put("/api/v1/settings", json={"environment": "production"}).status_code == 200
+    res = upload_commit(admin, roster_bytes(rows))
+    items = admin.get(f"/api/v1/caregivers?batch_id={res['batch_id']}").json()["items"]
+    ids = [i["caregiver_id"] for i in items]
+    # 시험 모드 꺼짐: 일반 실통화 → 검증 기록 없어 시작 불가
+    admin.put("/api/v1/settings", json={"policies": {"pilot_enabled": True, "test_numbers": "010-8000-0001"}})
+    camp = admin.post("/api/v1/campaigns", json={"batch_id": res["batch_id"], "voice_pack_id": pack["id"],
+                                                 "target_ids": ids}, idem=True).json()
+    assert camp["pilot"] is True and camp["accepted_count"] == 1
+    assert camp["excluded_targets"][0]["reason"] == "NOT_TEST_NUMBER"
+    dev = admin.post("/api/v1/devices", json={"name": "A24", "kind": "a24"}).json()
+    device = MockDevice()
+    agent = make_agent(admin, dev, device=device)
+    agent.heartbeat()
+    pf = admin.get(f"/api/v1/campaigns/{camp['campaign_id']}/preflight?device_id={dev['id']}").json()
+    assert pf["ok"], pf
+    assert start(admin, camp["campaign_id"], dev["id"]).status_code == 202
+    s = run_all(agent)
+    assert len(s) == 1 and device.dialed == ["01080000001"]
+    assert "01080000002" not in device.dialed
+    # 시험 모드를 끄면 남은 시험 캠페인도 발신 거부
+    admin.put("/api/v1/settings", json={"policies": {"pilot_enabled": False}})
+    assert agent.step().status != "CALLED"
+
+
+def test_pilot_rejects_invalid_test_number(admin):
+    r = admin.put("/api/v1/settings", json={"policies": {"test_numbers": "1234"}})
+    assert r.status_code == 422

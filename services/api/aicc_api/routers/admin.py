@@ -27,6 +27,7 @@ POLICY_KEYS = {
     "retention_days": int, "call_window_start": str, "call_window_end": str, "max_call_seconds": int,
     "max_attempts": int, "retry_interval_minutes": int, "recording_notice_confirmed": bool,
     "recording_notice_text": str, "ai_external_transfer_confirmed": bool, "silence_seconds": int,
+    "pilot_enabled": bool, "test_numbers": list,
 }
 
 
@@ -53,6 +54,19 @@ def put_settings(body: SettingsIn, p: Principal = Depends(current_user), db: Ses
         typ = POLICY_KEYS[k]
         if v is None or v == "":
             pol.pop(k, None)
+            continue
+        if typ is list:
+            from aicc_core.phone import normalize_phone
+            items = v if isinstance(v, list) else str(v).replace(",", "\n").splitlines()
+            clean = []
+            for it in items:
+                if not str(it).strip():
+                    continue
+                r = normalize_phone(str(it).strip())
+                if not r.ok:
+                    raise AppError(422, "POLICY_INVALID", f"시험 번호 형식 오류: {str(it)[:20]}")
+                clean.append(r.normalized)
+            pol[k] = sorted(set(clean))[:20]
             continue
         try:
             v = typ(v) if typ is not bool else bool(v)
@@ -356,16 +370,32 @@ def create_device(body: DeviceIn, p: Principal = Depends(current_user), db: Sess
             "note": "이 PC 에이전트에 연결했습니다." if bound else "토큰은 지금 한 번만 표시됩니다. 에이전트 설정에 입력하세요."}
 
 
-def _write_agent_env(token: str, kind: str) -> None:
+def _agent_env_path():  # noqa: ANN202
     from ..config import get_settings
-    path = get_settings().data_dir / "agent.env"
-    old = {}
+    return get_settings().data_dir / "agent.env"
+
+
+def _read_agent_env() -> dict[str, str]:
+    path = _agent_env_path()
+    old: dict[str, str] = {}
     if path.is_file():
         for line in path.read_text(encoding="utf-8").splitlines():
             if "=" in line and not line.startswith("#"):
                 k, v = line.split("=", 1)
-                old[k] = v
-    old.update({"AICC_DEVICE_TOKEN": token, "AICC_DEVICE_KIND": kind})
+                old[k.strip()] = v.strip()
+    return old
+
+
+def _write_agent_env(token: str | None, kind: str | None, extra: dict[str, str | None] | None = None) -> None:
+    path = _agent_env_path()
+    old = _read_agent_env()
+    if token:
+        old.update({"AICC_DEVICE_TOKEN": token, "AICC_DEVICE_KIND": kind or "mock"})
+    for k, v in (extra or {}).items():
+        if v is None or v == "":
+            old.pop(k, None)
+        else:
+            old[k] = v.replace("\n", " ").strip()
     path.write_text("# 통합 실행 프로그램 에이전트 설정(자동 생성). 저장소에 올리지 마십시오.\n"
                     + "".join(f"{k}={v}\n" for k, v in old.items()), encoding="utf-8")
     try:
@@ -429,3 +459,68 @@ def purge(p: Principal = Depends(current_user), db: Session = Depends(get_db)) -
     n = services.purge_expired(db, p)
     db.commit()
     return {"expired": n}
+
+
+# ------------------ 이 PC 에이전트 설정(통합 실행 프로그램 전용) ------------------
+AGENT_KEYS = {"AICC_STT_ENGINE", "AICC_WHISPER_MODEL", "AICC_TX_DEVICE", "AICC_GEMINI_MODEL", "GEMINI_API_KEY",
+              "AICC_ADB_SERIAL"}
+
+
+def _require_local() -> None:
+    if os.environ.get("AICC_LOCAL_AGENT") != "1":
+        raise AppError(409, "NOT_LOCAL", "이 기능은 PC 통합 실행 프로그램(AICC 아이콘)에서만 쓸 수 있습니다")
+
+
+@router.get("/local-agent")
+def local_agent(p: Principal = Depends(current_user)) -> dict:
+    require(p, "settings")
+    _require_local()
+    env = _read_agent_env()
+    status_file = _agent_env_path().parent / "agent_status.txt"
+    outputs: list[dict] | None = None
+    try:
+        import sounddevice as sd
+        default = sd.query_devices(kind="output")["name"]
+        outputs = [{"index": i, "name": d["name"], "is_default": d["name"] == default}
+                   for i, d in enumerate(sd.query_devices()) if d["max_output_channels"] > 0]
+    except Exception:  # noqa: BLE001
+        outputs = None
+    return {
+        "device_kind": env.get("AICC_DEVICE_KIND"), "has_token": bool(env.get("AICC_DEVICE_TOKEN")),
+        "stt_engine": env.get("AICC_STT_ENGINE") or "faster-whisper",
+        "whisper_model": env.get("AICC_WHISPER_MODEL") or "small",
+        "tx_device": env.get("AICC_TX_DEVICE") or "", "gemini_model": env.get("AICC_GEMINI_MODEL") or "",
+        "has_gemini_key": bool(env.get("GEMINI_API_KEY")),  # 키 원문은 돌려주지 않는다
+        "status": status_file.read_text(encoding="utf-8") if status_file.is_file() else None,
+        "output_devices": outputs,
+    }
+
+
+class LocalAgentIn(BaseModel):
+    stt_engine: str | None = Field(default=None, pattern="^(faster-whisper)$")
+    whisper_model: str | None = Field(default=None, pattern="^(tiny|base|small|medium|large-v3|large-v3-turbo)$")
+    tx_device: str | None = Field(default=None, max_length=200)
+    gemini_model: str | None = Field(default=None, max_length=100)
+    gemini_api_key: str | None = Field(default=None, max_length=200)  # 빈 문자열이면 삭제, None 이면 유지
+
+
+@router.put("/local-agent")
+def put_local_agent(body: LocalAgentIn, p: Principal = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    require(p, "settings")
+    _require_local()
+    extra: dict[str, str | None] = {}
+    if body.stt_engine is not None:
+        extra["AICC_STT_ENGINE"] = body.stt_engine
+    if body.whisper_model is not None:
+        extra["AICC_WHISPER_MODEL"] = body.whisper_model
+    if body.tx_device is not None:
+        extra["AICC_TX_DEVICE"] = body.tx_device
+    if body.gemini_model is not None:
+        extra["AICC_GEMINI_MODEL"] = body.gemini_model
+    if body.gemini_api_key is not None:
+        extra["GEMINI_API_KEY"] = body.gemini_api_key
+    _write_agent_env(None, None, extra)  # 파일이 바뀌면 통합 실행 프로그램이 에이전트를 다시 시작한다
+    audit(db, p, "local_agent.update", "organization", p.org.id,
+          {k: ("***" if k == "GEMINI_API_KEY" else v) for k, v in extra.items()})
+    db.commit()
+    return {"ok": True}

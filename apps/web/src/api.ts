@@ -57,7 +57,7 @@ export const ERROR_TEXT: Record<string, string> = {
   PHONE_NOT_PERSONAL: "개인 번호 아님", DATE_INVALID: "날짜 형식 오류",
   DUP_EXTERNAL_NO_CONFLICT: "같은 번호·다른 연락처", DUP_ROW: "중복 행", SHARED_PHONE: "연락처 공유",
   BLOCKED: "연락거부", DB_DATE_DIFFERS: "통화 확인값 유지",
-  ROW_ERROR: "행 오류", DUPLICATE: "중복", SHARED_PHONE_REVIEW: "연락처 공유 검수",
+  NOT_TEST_NUMBER: "시험 번호 아님", ROW_ERROR: "행 오류", DUPLICATE: "중복", SHARED_PHONE_REVIEW: "연락처 공유 검수",
 };
 
 export type Me = {

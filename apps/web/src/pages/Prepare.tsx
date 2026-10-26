@@ -30,7 +30,7 @@ export default function PreparePage({ me, campaignId }: { me: Me; campaignId: st
           <div><dt>캠페인</dt><dd className="text">{c.name}</dd></div>
           <div><dt>발신 대기</dt><dd>{queued}명</dd></div>
           <div><dt>안내 음성</dt><dd className="text">{c.voice_pack ? `${c.voice_pack.key === "female" ? "여성" : "남성"} v${c.voice_pack.version}` : "-"}</dd></div>
-          <div><dt>데이터</dt><dd className="text">{c.is_mock ? "MOCK 시험" : "실통화"}</dd></div>
+          <div><dt>데이터</dt><dd className="text">{c.is_mock ? "MOCK 시험" : c.pilot ? "실통화 시험(시험 번호만)" : "실통화"}</dd></div>
         </dl>
         <Field label="발신 단말">
           <select value={dev} onChange={(e) => setDevice(e.target.value)}>

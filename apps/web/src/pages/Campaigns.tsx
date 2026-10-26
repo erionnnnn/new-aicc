@@ -20,7 +20,7 @@ export default function CampaignsPage() {
                 <td>{STATE[c.state] ?? c.state}</td>
                 <td className="num">{c.done} / {c.total}</td>
                 <td className="num">{c.created_at}</td>
-                <td>{c.is_mock ? <span className="badge warn">MOCK 시험</span> : <span className="badge muted">실통화</span>}</td>
+                <td>{c.is_mock ? <span className="badge warn">MOCK 시험</span> : c.pilot ? <span className="badge warn">실통화 시험</span> : <span className="badge muted">실통화</span>}</td>
                 <td className="row-links">
                   {c.state === "DRAFT" || c.state === "PAUSED" ? <a href={`#/prepare?campaign=${c.id}`}>통화 준비</a> : null}
                   <a href={`#/monitor?campaign=${c.id}`}>통화 진행</a>

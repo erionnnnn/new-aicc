@@ -46,7 +46,7 @@ class FasterWhisperSTT(STTAdapter):  # pragma: no cover - 선택 의존성, 실�
         from faster_whisper import WhisperModel  # 지연 import
 
         self.model = WhisperModel(model or os.environ.get("AICC_WHISPER_MODEL", "small"), device=device,
-                                  compute_type=compute_type)
+                                  compute_type=compute_type)  # 처음 실행 시 모델을 내려받는다(수백 MB)
 
     def transcribe(self, frames: list[Frame]) -> SttResult:
         import numpy as np
@@ -68,5 +68,8 @@ def make_stt(kind: str) -> STTAdapter:
     if kind == "mock":
         return MockSTT()
     if kind == "faster-whisper":
-        return FasterWhisperSTT()
+        try:
+            return FasterWhisperSTT()
+        except ImportError as e:
+            raise RuntimeError("음성 인식 모듈(faster-whisper)이 없습니다. setup.ps1 을 다시 실행하세요") from e
     raise ValueError(f"STT 엔진이 설정되지 않았습니다: {kind!r} (AICC_STT_ENGINE)")

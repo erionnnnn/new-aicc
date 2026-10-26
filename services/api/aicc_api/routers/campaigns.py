@@ -59,7 +59,7 @@ def _camp_out(db: Session, c: Campaign) -> dict:
     pack = db.get(VoicePack, c.voice_pack_id)
     total = sum(counts.values())
     done = counts.get("DONE", 0) + counts.get("BLOCKED", 0) + counts.get("CANCELLED", 0)
-    return {"id": c.id, "name": c.name, "state": c.state, "version": c.version, "is_mock": c.is_mock,
+    return {"id": c.id, "name": c.name, "state": c.state, "version": c.version, "is_mock": c.is_mock, "pilot": c.pilot,
             "batch_id": c.batch_id, "device_id": c.device_id,
             "voice_pack": {"id": pack.id, "key": pack.pack_key, "version": pack.version} if pack else None,
             "total": total, "done": done, "target_states": counts,

@@ -170,6 +170,9 @@ class A24Device(DeviceAdapter):
         self._t0 = time.monotonic()
         self._precise_seen = False
         self._rx_running = False
+        # 실통화 시험(pilot)에서만: 송신 장치가 없으면 안내 음성을 보내지 않고 시간만 흘려 흐름을 시험한다
+        self.allow_silent_tx = False
+        self.silent_tx_used = False
 
     def now_ms(self) -> int:
         if self.rx is not None and hasattr(self.rx, "now_ms"):
@@ -263,6 +266,10 @@ class A24Device(DeviceAdapter):
 
     def write_tx_frames(self, frames: list[Frame]) -> int:
         if self.tx is None:
+            if self.allow_silent_tx:
+                self.silent_tx_used = True
+                time.sleep(len(frames) * FRAME_MS / 1000)
+                return len(frames)
             raise DeviceUnverified("TX 오디오 경로가 지정·검증되지 않았습니다(scrcpy 는 송신을 지원하지 않음)")
         return self.tx.write(frames)
 

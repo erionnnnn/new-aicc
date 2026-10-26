@@ -24,6 +24,8 @@ py -$pyver -m venv .venv
 # 안내 음성 자동 생성용(선택). 실패해도 설치는 계속한다.
 & .\.venv\Scripts\pip install -e ".[tts]"
 if ($LASTEXITCODE -ne 0) { Write-Host "안내 음성 자동 생성 모듈 설치 실패 — 녹음 파일 업로드나 Windows 음성은 사용 가능" -ForegroundColor Yellow }
+& .\.venv\Scripts\pip install -e ".[voice]"
+if ($LASTEXITCODE -ne 0) { Write-Host "음성 인식(faster-whisper) 모듈 설치 실패 — 실통화 시험 전에 다시 실행하세요" -ForegroundColor Yellow }
 if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
   Write-Host ""
   Write-Host "Node.js 가 설치되어 있지 않습니다(웹 화면 빌드에 필요)." -ForegroundColor Yellow

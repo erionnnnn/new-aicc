@@ -174,6 +174,8 @@ class Campaign(Base):
     voice_pack_digest: Mapped[str] = mapped_column(String(32))
     device_id: Mapped[str | None] = mapped_column(ForeignKey("devices.id"), nullable=True)
     is_mock: Mapped[bool] = mapped_column(Boolean, default=False)
+    # 실통화 시험: 운영 조직에서 실기기 검증 전, 관리자가 등록한 시험 번호로만 발신
+    pilot: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     state: Mapped[str] = mapped_column(String(20), default="DRAFT")
     # DRAFT | RUNNING | PAUSED | STOPPING | STOPPED | COMPLETED
     version: Mapped[int] = mapped_column(Integer, default=1)

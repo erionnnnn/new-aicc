@@ -120,6 +120,10 @@ class CallRunner:
     def run(self, claim: dict) -> CallSummary:
         self.call_id = claim["call_id"]
         self.is_mock = bool(claim.get("is_mock"))
+        self.pilot = bool(claim.get("pilot"))
+        if hasattr(self.device, "allow_silent_tx"):
+            self.device.allow_silent_tx = self.pilot
+            self.device.silent_tx_used = False
         self._seq = 0
         self._buf: list[dict] = []
         self.summary = CallSummary(self.call_id)
@@ -366,8 +370,12 @@ class CallRunner:
         outcome = self.flow.outcome or "DEVICE_ERROR"
         if outcome == "CONFIRMED" and self.confirm_failed:
             outcome = "UNCONFIRMED"
+        silent = bool(getattr(self.device, "silent_tx_used", False))
+        if silent:
+            self.flow.review_reasons.append("PILOT_NO_TX_DEVICE")
         self._emit("flags", self.flow.turn, {"rx_speech_frames": self.rx_speech_frames,
-                                             "tx_remote_heard": "UNVERIFIED", "mock": self.is_mock})
+                                             "tx_remote_heard": "NOT_SENT" if silent else "UNVERIFIED",
+                                             "mock": self.is_mock, "pilot": self.pilot})
         self._emit("call.ended", self.flow.turn, {"outcome": outcome})
         self.summary.outcome = outcome
         self.summary.review_reasons = list(self.flow.review_reasons)

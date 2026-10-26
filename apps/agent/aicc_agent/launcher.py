@@ -68,8 +68,16 @@ def build_agent(env: dict[str, str], base: str):  # noqa: ANN201
     elif env.get("AICC_RX_DEVICE") and env.get("AICC_TX_DEVICE"):
         route = AudioRoute(env["AICC_RX_DEVICE"], env["AICC_TX_DEVICE"])
     dev = A24Device(Adb(serial=serial), route, state_file=data / "probe_state.json", rx=rx, tx=tx)
-    return Agent(client, dev, make_stt(env.get("AICC_STT_ENGINE", "none")),
-                 make_ai(env.get("AICC_AI", "gemini-live")))
+    from .ai import FailingAI
+
+    stt = make_stt(env.get("AICC_STT_ENGINE") or "faster-whisper")
+    if env.get("GEMINI_API_KEY") and env.get("AICC_GEMINI_MODEL"):
+        os.environ["GEMINI_API_KEY"] = env["GEMINI_API_KEY"]
+        os.environ["AICC_GEMINI_MODEL"] = env["AICC_GEMINI_MODEL"]
+        ai = make_ai("gemini-live")
+    else:
+        ai = FailingAI()  # 키가 없으면 예외 질문은 '상담 요청'으로 넘기고 날짜는 저장하지 않는다
+    return Agent(client, dev, stt, ai)
 
 
 def supervise_agent(env_file: Path, base: str, stop: threading.Event) -> None:  # pragma: no cover
@@ -90,12 +98,15 @@ def supervise_agent(env_file: Path, base: str, stop: threading.Event) -> None:  
                     agent = build_agent(env, base)
                 except Exception as e:  # noqa: BLE001
                     log.error("에이전트 시작 실패: %s", e)
+                    (env_file.parent / "agent_status.txt").write_text(f"ERROR {type(e).__name__}: {e}", encoding="utf-8")
                     current = None
                 else:
                     current = threading.Thread(target=agent.run_forever, args=(agent_stop,), daemon=True,
                                                name="aicc-agent")
                     current.start()
                     log.info("에이전트 시작(%s)", env.get("AICC_DEVICE_KIND", "mock"))
+                    (env_file.parent / "agent_status.txt").write_text(f"OK {env.get('AICC_DEVICE_KIND', 'mock')}",
+                                                                      encoding="utf-8")
         stop.wait(2.0)
     agent_stop.set()
 
