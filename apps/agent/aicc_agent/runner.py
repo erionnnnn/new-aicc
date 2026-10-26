@@ -362,6 +362,7 @@ class CallRunner:
             f.t_ms = self.device.now_ms()
             self.device.write_tx_frames([f])
             self.recorder.add_tx([f])
+        self.device.tx_segment_done("ai")
         self._emit("ai.done", a.turn, {"text": reply.text, "latency_ms": reply.latency_ms, "engine": self.ai.name})
         self._apply(self.flow.ai_done(turn=a.turn))
 

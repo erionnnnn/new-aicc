@@ -216,3 +216,81 @@ def test_adb_socket_tx_unreachable_raises():
         tx.start()
     with pytest.raises(ValueError):
         AdbSocketTx(FakeAdb(), "28200")
+
+
+def test_gcar_header_format():
+    from aicc_agent.gcar_tx import gcar_bytes, split_pcm
+    pcm = b"\x01\x02" * 8000  # 0.5초
+    g = gcar_bytes(pcm)
+    assert g[:4] == b"GCAR"
+    assert struct.unpack(">III", g[4:16]) == (16000, 1, 16000)
+    assert g[16:] == pcm
+    parts = split_pcm(b"\x00" * (16000 * 2 * 65))  # 65초 → 30+30+5
+    assert [len(p) // 32000 for p in parts] == [30, 30, 5]
+
+
+class FakeProc:
+    def __init__(self, rc=0):
+        self.rc = rc
+        self.stderr = None
+
+    def wait(self, timeout=None):
+        return self.rc
+
+    def poll(self):
+        return self.rc
+
+
+class GcarAdb(FakeAdb):
+    def __init__(self, rc=0):
+        super().__init__()
+        self.popens = []
+        self.rc = rc
+
+    def popen(self, *args):
+        self.popens.append(args)
+        return FakeProc(self.rc)
+
+
+def test_gcar_tx_push_and_app_process_command(tmp_path):
+    import re as _re
+
+    from aicc_agent.audio import split_frames, tone
+    from aicc_agent.gcar_tx import GcarFileTx
+    jar = tmp_path / "goodcare-uplink.jar"
+    jar.write_bytes(b"PK-fake-jar")
+    adb = GcarAdb()
+    tx = GcarFileTx(adb, jar, workdir=tmp_path / "w", extra_wait_s=1)
+    tx.start()
+    cid = tx.call_id
+    assert _re.fullmatch(r"[0-9a-f]{32}", cid)
+    assert ("push", str(jar), f"/data/local/tmp/goodcare-uplink-{cid}.jar") in adb.calls
+    tx.write(split_frames(tone(500), 0))
+    tx.flush()
+    gcar = f"/data/local/tmp/goodcare-uplink-{cid}.gcar"
+    assert adb.popens[-1] == ("shell", "-T", f"CLASSPATH=/data/local/tmp/goodcare-uplink-{cid}.jar", "app_process", "/",
+                              "com.goodcare.a24.Uplink", "--play-file", gcar, gcar + ".stop")
+    assert any(c[0] == "push" and c[2] == gcar for c in adb.calls)
+    assert not list((tmp_path / "w").glob("*.gcar"))  # PC 임시 파일 삭제
+    tx.stop()
+    assert any(c[0] == "shell" and c[1].startswith("rm -f") and gcar in c[1] for c in adb.calls)
+    assert tx.call_id is None
+
+
+def test_gcar_tx_failure_and_a24_flush(tmp_path):
+    from aicc_agent.audio import split_frames, tone
+    from aicc_agent.gcar_tx import GcarFileTx
+    jar = tmp_path / "u.jar"
+    jar.write_bytes(b"x")
+    adb = GcarAdb(rc=1)
+    tx = GcarFileTx(adb, jar, workdir=tmp_path, extra_wait_s=1)
+    d = A24Device(adb, rx=FakeRx(), tx=tx, state_file=tmp_path / "s.json")
+    d.dial("01012345678")
+    assert tx.call_id is not None  # 발신과 함께 JAR 준비
+    d.write_tx_frames(split_frames(tone(100), 0))
+    with pytest.raises(DeviceError, match="송출 모듈 실행 실패"):
+        d.tx_segment_done("opening")
+    d.hangup()
+    assert tx.call_id is None
+    with pytest.raises(DeviceError, match="송출 모듈 파일이 없습니다"):
+        GcarFileTx(adb, tmp_path / "none.jar").start()

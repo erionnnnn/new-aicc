@@ -302,7 +302,7 @@ function PilotPanel({ me }: { me: Me }) {
     try {
       await api.put("/api/v1/local-agent", {
         whisper_model: f.get("wmodel"), tx_device: f.get("tx") ?? "", gemini_model: f.get("gmodel") ?? "",
-        tx_adb_target: String(f.get("txt") ?? "").trim(), tx_rate: f.get("txr"), tx_channels: f.get("txc"),
+        uplink_jar: String(f.get("jar") ?? "").trim(), tx_adb_target: String(f.get("txt") ?? "").trim(), tx_rate: f.get("txr"), tx_channels: f.get("txc"),
         tx_start_cmd: String(f.get("txs") ?? "").trim(),
         ...(key ? { gemini_api_key: key } : {}),
       });
@@ -334,7 +334,10 @@ function PilotPanel({ me }: { me: Me }) {
                 {["tiny", "base", "small", "medium", "large-v3-turbo"].map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
             </Field>
-            <Field label="휴대폰 송출 모듈 소켓(TX)" hint="예: tcp:28200 또는 localabstract:이름 — 기존 송출 모듈이 듣는 주소">
+            <Field label="송출 모듈 JAR 경로(TX, 기존 방식)" hint="기존 a24_usb\bin\goodcare-uplink.jar 의 전체 경로. new-aicc\tools\uplink 에 복사해 두면 비워도 됩니다">
+              <input name="jar" defaultValue={a.uplink_jar} placeholder="C:\...\goodcare-uplink.jar" />
+            </Field>
+            <Field label="(대안) 소켓 송출 모듈" hint="JAR 방식을 쓰면 비워 두세요">
               <input name="txt" defaultValue={a.tx_adb_target} placeholder="tcp:28200" />
             </Field>
             <Field label="송출 형식(샘플레이트·채널)">

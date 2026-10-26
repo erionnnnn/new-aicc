@@ -74,6 +74,15 @@ class Adb:
             raise DeviceError(f"휴대폰이 여러 대 연결되어 있습니다({', '.join(ready)}). AICC_ADB_SERIAL 로 하나를 지정하세요")
         self._ready = True
 
+    def popen(self, *args: str) -> subprocess.Popen:
+        """오래 걸리는 adb 명령(송출 모듈 재생 등)을 비동기로 실행."""
+        if not self.adb:
+            raise DeviceError("adb 실행 파일을 찾지 못했습니다")
+        self.ensure_ready()
+        cmd = [self.adb] + (["-s", self.serial] if self.serial else []) + list(args)
+        return subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+
     def run(self, *args: str, timeout: float = 15.0) -> str:
         if not self.adb:
             raise DeviceError("adb 실행 파일을 찾지 못했습니다(Android platform-tools 설치 필요)")
@@ -282,4 +291,10 @@ class A24Device(DeviceAdapter):
         return self.tx.write(frames)
 
     def tx_segment_done(self, label: str) -> None:
-        pass
+        # 파일 송출 방식(GcarFileTx)은 안내 1건이 끝나면 한 번에 재생하고 끝날 때까지 기다린다
+        if self.tx is not None and hasattr(self.tx, "flush"):
+            self.tx.flush()
+
+    def stop_tx(self) -> None:
+        if self.tx is not None and hasattr(self.tx, "stop_playback"):
+            self.tx.stop_playback()

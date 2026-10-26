@@ -490,6 +490,7 @@ def local_agent(p: Principal = Depends(current_user)) -> dict:
         "stt_engine": env.get("AICC_STT_ENGINE") or "faster-whisper",
         "whisper_model": env.get("AICC_WHISPER_MODEL") or "small",
         "tx_device": env.get("AICC_TX_DEVICE") or "", "gemini_model": env.get("AICC_GEMINI_MODEL") or "",
+        "uplink_jar": env.get("AICC_UPLINK_JAR") or "",
         "tx_adb_target": env.get("AICC_TX_ADB_TARGET") or "", "tx_rate": env.get("AICC_TX_RATE") or "16000",
         "tx_channels": env.get("AICC_TX_CHANNELS") or "1", "tx_start_cmd": env.get("AICC_TX_START_CMD") or "",
         "has_gemini_key": bool(env.get("GEMINI_API_KEY")),  # 키 원문은 돌려주지 않는다
@@ -507,6 +508,7 @@ class LocalAgentIn(BaseModel):
     tx_adb_target: str | None = Field(default=None, max_length=140,
                                 pattern=r"^$|^(tcp:[0-9]+|localabstract:[A-Za-z0-9_.\-]+|localfilesystem:[A-Za-z0-9_./\-]+)$")
     tx_rate: str | None = Field(default=None, pattern="^(8000|16000|24000|32000|44100|48000)$")
+    uplink_jar: str | None = Field(default=None, max_length=400)
     tx_channels: str | None = Field(default=None, pattern="^(1|2)$")
     tx_start_cmd: str | None = Field(default=None, max_length=300, pattern=r"^$|^shell [A-Za-z0-9_ ./:=\-]+$")
 
@@ -526,7 +528,13 @@ def put_local_agent(body: LocalAgentIn, p: Principal = Depends(current_user), db
         extra["AICC_GEMINI_MODEL"] = body.gemini_model
     if body.gemini_api_key is not None:
         extra["GEMINI_API_KEY"] = body.gemini_api_key
-    for field, key in (("tx_adb_target", "AICC_TX_ADB_TARGET"), ("tx_rate", "AICC_TX_RATE"),
+    if body.uplink_jar:
+        from pathlib import Path as _P
+        jp = _P(body.uplink_jar.strip().strip('"'))
+        if jp.suffix.lower() != ".jar" or not jp.is_file():
+            raise AppError(422, "JAR_NOT_FOUND", f"송출 모듈 JAR 파일을 찾을 수 없습니다: {jp}")
+        body.uplink_jar = str(jp)
+    for field, key in (("uplink_jar", "AICC_UPLINK_JAR"), ("tx_adb_target", "AICC_TX_ADB_TARGET"), ("tx_rate", "AICC_TX_RATE"),
                        ("tx_channels", "AICC_TX_CHANNELS"), ("tx_start_cmd", "AICC_TX_START_CMD")):
         v = getattr(body, field)
         if v is not None:

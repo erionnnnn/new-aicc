@@ -64,7 +64,13 @@ def build_agent(env: dict[str, str], base: str):  # noqa: ANN201
         rx = ScrcpyRx(serial=serial, scrcpy=env.get("AICC_SCRCPY") or None,
                       source=env.get("AICC_SCRCPY_SOURCE") or None, workdir=data / "tmp")
         from .adb_tx import tx_from_env
-        tx = tx_from_env(env, Adb(serial=serial))  # 기본: ADB 로 휴대폰 자체 송출 모듈에 PCM 전달
+        from .gcar_tx import GcarFileTx, default_jar
+
+        jar = env.get("AICC_UPLINK_JAR") or (str(default_jar()) if default_jar() else "")
+        if jar:  # 기본(검증된 기존 방식): .gcar 파일 push + app_process 로 goodcare-uplink.jar 실행
+            tx = GcarFileTx(Adb(serial=serial), jar, workdir=data / "tmp")
+        else:
+            tx = tx_from_env(env, Adb(serial=serial))  # 대안: 소켓 방식 송출 모듈
         if tx is None and env.get("AICC_TX_DEVICE"):
             tx = TxOutput(env["AICC_TX_DEVICE"])
     elif env.get("AICC_RX_DEVICE") and env.get("AICC_TX_DEVICE"):
