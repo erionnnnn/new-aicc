@@ -27,8 +27,23 @@ from .device import FRAME_MS, SAMPLE_RATE, DeviceError, Frame
 SCRCPY_SOURCES = ("voice-call-downlink", "voice-call", "voice-call-uplink")
 
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+BUNDLED_DIR = REPO_ROOT / "tools" / "scrcpy"  # scripts/setup.ps1 이 scrcpy 5.0.1 을 여기에 설치
+
+
+def _bundled(name: str) -> str | None:
+    for cand in (BUNDLED_DIR / f"{name}.exe", BUNDLED_DIR / name):
+        if cand.is_file():
+            return str(cand)
+    return None
+
+
 def scrcpy_path() -> str | None:
-    return os.environ.get("AICC_SCRCPY") or shutil.which("scrcpy")
+    return os.environ.get("AICC_SCRCPY") or _bundled("scrcpy") or shutil.which("scrcpy")
+
+
+def bundled_adb() -> str | None:
+    return _bundled("adb")
 
 
 def build_command(scrcpy: str, record_path: str, *, serial: str | None = None,

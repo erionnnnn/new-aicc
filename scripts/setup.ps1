@@ -29,6 +29,25 @@ if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
   exit 1
 }
 Push-Location apps\web; npm ci; npm run build; Pop-Location
+# scrcpy 5.0.1(Windows 64bit) 내려받기 — 상대 음성(RX) USB 수신용. adb.exe 도 함께 들어 있다.
+$scVer = "5.0.1"
+$scSha = "b12a2c4ee8be317422451fc7dcf8ee20a71b5ea7ef9ad73ddd825a25316227a5"   # 공식 SHA256SUMS.txt 값
+$scDir = Join-Path (Get-Location) "tools\scrcpy"
+if (-not (Test-Path (Join-Path $scDir "scrcpy.exe"))) {
+  Write-Host "scrcpy $scVer 내려받는 중..."
+  New-Item -ItemType Directory -Force -Path "tools" | Out-Null
+  $zip = Join-Path "tools" "scrcpy-win64-v$scVer.zip"
+  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+  Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/Genymobile/scrcpy/releases/download/v$scVer/scrcpy-win64-v$scVer.zip" -OutFile $zip
+  $got = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+  if ($got -ne $scSha) { Remove-Item $zip; Write-Host "scrcpy 파일 검증 실패(해시 불일치). 설치를 중단합니다." -ForegroundColor Red; exit 1 }
+  Expand-Archive -Force $zip -DestinationPath "tools"
+  if (Test-Path $scDir) { Remove-Item -Recurse -Force $scDir }
+  Rename-Item (Join-Path "tools" "scrcpy-win64-v$scVer") "scrcpy"
+  Remove-Item $zip
+}
+Write-Host "scrcpy: $scDir"
+
 # 바탕화면 바로가기(AICC) 생성 — 이후 이 아이콘 하나만 실행
 $lnk = Join-Path ([Environment]::GetFolderPath("Desktop")) "AICC.lnk"
 $ws = New-Object -ComObject WScript.Shell

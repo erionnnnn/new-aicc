@@ -33,7 +33,10 @@ _SPEAKER_HINTS = ("speaker", "스피커", "realtek", "headphone", "헤드폰", "
 
 class Adb:
     def __init__(self, serial: str | None = None, adb: str | None = None):
-        self.adb = adb or os.environ.get("AICC_ADB") or shutil.which("adb")
+        if adb is None:
+            from .scrcpy_rx import bundled_adb
+            adb = os.environ.get("AICC_ADB") or bundled_adb() or shutil.which("adb")
+        self.adb = adb
         self.serial = serial or os.environ.get("AICC_ADB_SERIAL")
 
     def available(self) -> bool:
