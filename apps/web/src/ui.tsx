@@ -65,7 +65,8 @@ export function DateCell({ value, confirmed }: { value?: string | null; confirme
 export function MockBanner() {
   return (
     <div className="mock-banner" role="note">
-      시험 조직(MOCK) — 실제 전화를 걸지 않으며 모든 통화 결과는 시험 데이터입니다.
+      시험 조직(MOCK) — 실제 전화를 걸지 않으며 모든 통화 결과는 시험 데이터입니다.{" "}
+      <a href="#/settings?tab=policy">실제 통화로 바꾸기: 설정 &gt; 운영 정책 맨 아래 ‘운영 조직(실통화)으로 전환’</a>
     </div>
   );
 }
