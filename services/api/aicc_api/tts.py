@@ -144,6 +144,10 @@ def synth_gemini(text: str, pack_key: str, api_key: str | None, model: str | Non
                 raise
             except Exception as e:  # noqa: BLE001
                 msg = str(e)
+                if "API key not valid" in msg or "API_KEY_INVALID" in msg or "PERMISSION_DENIED" in msg:
+                    raise TTSError("Gemini 키가 올바르지 않습니다. 설정 > 단말 > 이 PC 에이전트에서 Google AI Studio 에서 받은 "
+                                   "키(보통 AIza 로 시작)를 다시 붙여 넣으세요. 브라우저가 로그인 비밀번호를 자동으로 채웠을 수 있습니다."
+                                   ) from None
                 last = f"{m}: {type(e).__name__} {msg[:160]}"
                 if "429" in msg or "RESOURCE_EXHAUSTED" in msg or "503" in msg:
                     time.sleep(8 * (attempt + 1))  # 분당 요청 한도 — 기다렸다 재시도
