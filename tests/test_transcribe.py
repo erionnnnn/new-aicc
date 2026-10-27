@@ -12,6 +12,12 @@ def test_mask_personal_info():
     assert mask("간병사님 안녕하세요") == "간병사님 안녕하세요"  # 호칭 자체는 남김
     assert mask("실장님이 연락드릴게요") == "실장님이 연락드릴게요"
     assert "[이메일]" in mask("abc@naver.com 으로")
+    # 실제 결과에서 새어 나온 형태(2026-10-27)
+    for t, name in (("김철수 선생님이시고 오늘", "김철수"), ("박영자 간병사.", "박영자"), ("이순자라고 합니다", "이순자"),
+                    ("최미숙이라고 합니다", "최미숙")):
+        assert name not in mask(t), t
+    assert mask("그럼 선생님 감사합니다") == "그럼 선생님 감사합니다"
+    assert mask("좋은간병입니다 선생님") == "좋은간병입니다 선생님"
 
 
 def test_write_xlsx(tmp_path):

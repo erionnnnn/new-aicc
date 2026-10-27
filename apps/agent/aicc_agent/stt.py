@@ -39,7 +39,7 @@ class MockSTT(STTAdapter):
         return SttResult(text, True, 1.0, 0, self.name)
 
 
-DEFAULT_PROMPT = ("간병 근무 일정 확인 전화입니다. 네. 아니요. 아니에요. 네, 통화 가능합니다. 지금은 근무 중이에요. "
+DEFAULT_PROMPT = ("좋은간병입니다. 선생님. 간병 근무 일정 확인 전화입니다. 네. 아니요. 아니에요. 네, 통화 가능합니다. 지금은 근무 중이에요. "
                   "근무 안 해요. 다음 주 월요일부터 가능해요. 11월 3일. 연락하지 마세요.")
 
 
