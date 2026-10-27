@@ -300,3 +300,20 @@ def test_gcar_tx_failure_and_a24_flush(tmp_path):
     assert tx.call_id is None
     with pytest.raises(DeviceError, match="송출 모듈 파일이 없습니다"):
         GcarFileTx(adb, tmp_path / "none.jar").start()
+
+
+DUAL_SIM_DIALING = """  mCallState=0
+  mPreciseCallState=Ringing call state: 0, Foreground call state: 0, Background call state: 0
+  mCallState=2
+  mPreciseCallState=Ringing call state: 0, Foreground call state: 4, Background call state: 0
+"""
+
+
+def test_dual_sim_uses_active_slot_not_idle_one():
+    from aicc_agent.a24 import parse_call_state
+    assert parse_call_state(DUAL_SIM_DIALING).state == "ALERTING"
+    assert parse_call_state(DUAL_SIM_DIALING.replace("state: 4", "state: 1")).state == "ACTIVE"
+    assert parse_call_state("mCallState=0\nmCallState=0\n").state == "IDLE"
+    assert parse_call_state("mCallState=0\nmCallState=2\n").state == "UNKNOWN"  # OFFHOOK 만으론 응답 판정 불가
+    both_idle_precise = DUAL_SIM_DIALING.replace("state: 4", "state: 0")
+    assert parse_call_state(both_idle_precise).state == "DIALING"  # 한 슬롯이 OFFHOOK

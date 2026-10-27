@@ -180,15 +180,31 @@ class CallRunner:
         self._emit("call.dialing", 0, {"mock": self.is_mock})
         self.device.dial(phone)
         t0 = self.device.now_ms()
+        progressed = False  # 발신이 실제로 시작된 것(DIALING/ALERTING/OFFHOOK)을 한 번이라도 봤는지
+        last_state = None
         while True:
             st = self.device.get_call_state()
             elapsed = self.device.now_ms() - t0
+            if st.state != last_state:
+                log.info("[통화 %s] 단말 상태 %s %s (%dms)", self.call_id[:8], st.state, st.detail, elapsed)
+                last_state = st.state
+            if st.state not in ("IDLE", "ENDED"):
+                progressed = True
             if st.state == "ACTIVE":
                 self.answered_ms = self.device.now_ms()
                 self._emit("call.answered", 0, {"detail": st.detail, "source": "device_state"})
                 self._flush()
                 self._apply(self.flow.answered())
                 break
+            if st.state in ("IDLE", "ENDED") and not progressed and not self.is_mock:
+                if elapsed <= 8000:
+                    self._tick(self.cfg.poll_ms, record=False)  # 전화 앱이 아직 발신을 시작하지 않았을 수 있음
+                    continue
+                # 발신 자체가 시작되지 않음: '통화중'으로 꾸미지 않고 장치 오류로 남긴다
+                self._emit("call.dial_not_started", 0, st.detail)
+                self.device.hangup()
+                self._apply(self.flow.device_error("dial_not_started"))
+                return
             if st.state in ("IDLE", "ENDED") and elapsed > 1000:
                 reason = "BUSY" if elapsed < 6000 else "NO_ANSWER"
                 self._emit("call.not_answered", 0, {"reason": reason, "elapsed_ms": elapsed})

@@ -31,6 +31,31 @@ _PRECISE_MAP = {0: "IDLE", 1: "ACTIVE", 2: "ACTIVE", 3: "DIALING", 4: "ALERTING"
 _SPEAKER_HINTS = ("speaker", "스피커", "realtek", "headphone", "헤드폰", "hdmi", "display", "default", "기본")
 
 
+
+def parse_call_state(out: str, dev=None) -> CallStatus:
+    """dumpsys telephony.registry 결과를 해석한다.
+
+    듀얼 SIM 기기(A24 포함)는 SIM 슬롯마다 줄이 따로 나온다. 첫 줄만 보면 쓰지 않는 슬롯의
+    IDLE(0)을 읽어 '통화중(BUSY)'으로 오판하므로(2026-10-27 실기기 로그), 모든 슬롯을 보고
+    가장 진행된 상태를 고른다.
+    """
+    precise = [int(x) for x in _PRECISE.findall(out)]
+    legacy = [int(x) for x in _CALLSTATE.findall(out)]
+    detail = {"legacy": legacy, "precise": precise}
+    if precise:
+        if dev is not None:
+            dev._precise_seen = True
+        for codes, state in (((1, 2), "ACTIVE"), ((4,), "ALERTING"), ((3,), "DIALING"), ((7, 8), "ENDED")):
+            if any(c in codes for c in precise):
+                return CallStatus(state, detail)
+        if any(c != 0 for c in legacy):
+            return CallStatus("DIALING", detail)  # 정밀 상태는 아직 0이지만 통화 중(OFFHOOK)
+        return CallStatus("IDLE", detail)
+    if legacy and all(c == 0 for c in legacy):
+        return CallStatus("IDLE", detail)
+    # OFFHOOK 만으로는 응답 여부를 알 수 없다
+    return CallStatus("UNKNOWN", detail)
+
 class Adb:
     def __init__(self, serial: str | None = None, adb: str | None = None):
         if adb is None:
@@ -260,18 +285,7 @@ class A24Device(DeviceAdapter):
     def get_call_state(self) -> CallStatus:
         # 출력이 큰 dumpsys 를 단말에서 걸러 받아 시간을 줄인다
         out = self.adb.run("shell", "dumpsys telephony.registry | grep -iE 'mCallState|call state'", timeout=15)
-        m = _PRECISE.search(out)
-        legacy = _CALLSTATE.search(out)
-        detail = {"legacy": int(legacy.group(1)) if legacy else None}
-        if m:
-            self._precise_seen = True
-            code = int(m.group(1))
-            detail["precise"] = code
-            return CallStatus(_PRECISE_MAP.get(code, "UNKNOWN"), detail)
-        if legacy and legacy.group(1) == "0":
-            return CallStatus("IDLE", detail)
-        # OFFHOOK 만으로는 응답 여부를 알 수 없다
-        return CallStatus("UNKNOWN", detail)
+        return parse_call_state(out, self)
 
     def read_rx_frames(self, max_ms: int) -> list[Frame]:
         if self.rx is None:
