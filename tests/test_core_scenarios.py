@@ -135,3 +135,37 @@ def test_real_call_phrases_2026_10_27():
     d.say("네. 네.")
     assert d.say("네가 그걸 왜 궁금해.") == ["sc_why_call"]
     assert match("안 알려줄래?").code == "WHY_CALL"
+
+
+def test_conversation_mode_uses_ai_instead_of_repeat_and_keeps_state():
+    from aicc_core.flow import StartAI
+    f = CallFlow(REF, clips=ALL, ai_conversation=True)
+    f.answered()
+    acts = f.utterance("음 글쎄 그게 좀", turn=f.turn, event_id="e1")
+    assert isinstance(acts[0], StartAI) and acts[0].return_state == "OPENING"
+    assert f.ai_done(turn=f.turn) == []  # AI 가 이미 되물음 → 녹음 질문 반복 안 함
+    assert f.state == "OPENING"
+    acts = f.utterance("지금은 쉬고 있어요", turn=f.turn, event_id="e2")
+    assert [a.key for a in acts if isinstance(a, Play)] == ["ask_available_date"]
+
+
+def test_conversation_mode_ai_failure_returns_to_question_not_hangup():
+    f = CallFlow(REF, clips=ALL, ai_conversation=True)
+    f.answered()
+    f.utterance("네", turn=f.turn, event_id="e1")
+    f.utterance("음 그게", turn=f.turn, event_id="e2")
+    acts = f.ai_failed(turn=f.turn)
+    assert [a.key for a in acts if isinstance(a, Play)] == ["ask_working"] and not f.finished
+
+
+def test_conversation_mode_opening_no_is_not_hangup():
+    from aicc_core.flow import StartAI
+    f = CallFlow(REF, clips=ALL, ai_conversation=True)
+    f.answered()
+    acts = f.utterance("아닌데요", turn=f.turn, event_id="e1")
+    assert isinstance(acts[0], StartAI) and not f.finished
+
+
+def test_wrong_person_variants():
+    d = D()
+    assert d.say("나 간병이 아닌데?") == ["wrong_person"]

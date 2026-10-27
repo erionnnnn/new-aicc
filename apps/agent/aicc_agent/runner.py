@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import concurrent.futures as cf
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
@@ -29,7 +30,7 @@ from aicc_core.flow import (
 from aicc_core.scenarios import SCENARIO_KEYS
 from aicc_core.voicepack import confirm_date_sequence
 
-from .ai import ExceptionAI
+from .ai import ExceptionAI, build_prompt
 from .audio import EnergyVAD, read_wav_mono16, rms, split_frames, tone
 from .client import AgentClient, ApiError, new_event_id
 from .device import FRAME_MS, DeviceAdapter, DeviceError, Frame
@@ -52,11 +53,12 @@ class RunnerConfig:
     barge_threshold: float = 600.0  # 안내 재생 중에는 평소(300)보다 큰 소리만 상대 말로 본다(메아리·잡음 오인 방지)
     barge_min_ms: int = 400         # 그 소리가 이만큼 이어져야 끼어들기로 인정
     filler_min_speech_ms: int = 300 # 이보다 짧은 소리에는 '네,' 맞장구를 내지 않음
+    filler: bool = False            # '네,' 맞장구: 너무 잦다는 의견(2026-10-27)으로 기본 끔. AICC_FILLER=1 로 켬
     real_vad_end_ms: int = 600    # 실통화: '네 통화 / 가능합니다' 처럼 숨 쉬는 사이에 문장이 쪼개지지 않게
     tx_chunk_ms: int = 200
     vad_end_ms: int = 350
     vad_threshold: float = 300.0
-    ai_wait_after_ms: int = 1200
+    ai_wait_after_ms: int = 3000  # AI 답이 이보다 늦을 때만 '잠시만요'(매번 나오면 기계 같음)
     ai_timeout_s: float = 10.0
     barge_in: bool = True
     state_check_ms: int = 1000
@@ -117,6 +119,7 @@ class CallRunner:
     # ---------------- 이벤트 ----------------
     def _emit(self, type_: str, turn: int, payload: dict | None = None, event_id: str | None = None) -> str:
         eid = event_id or new_event_id()
+        self._remember(type_, payload or {})
         if type_ in ("call.answered", "call.not_answered", "call.answer_unknown", "play", "utterance.final",
                      "ai.start", "ai.failed", "schedule.confirmed", "schedule.confirm_rejected", "silence.timeout",
                      "call.remote_hangup", "call.ended", "tx.barge_in", "call.greeting", "play.filler",
@@ -148,6 +151,7 @@ class CallRunner:
             self.device.allow_silent_tx = self.pilot
             self.device.silent_tx_used = False
         self._seq = 0
+        self._log: list[tuple[str, str]] = []
         self._buf: list[dict] = []
         self.summary = CallSummary(self.call_id)
         self.recorder = DualRecorder()
@@ -157,7 +161,10 @@ class CallRunner:
         pack = claim["voice_pack"]
         self.voice = VoiceBank(pack["manifest"], lambda k: self._fetch_clip(pack["id"], k), self.is_mock)
         clips = {k for k, c in (pack["manifest"].get("clips") or {}).items() if c.get("file")}
-        self.flow = CallFlow(date.fromisoformat(claim["reference_date"]), clips=clips)
+        conv = getattr(self.ai, "name", "") not in ("failing",) and not self.is_mock
+        self.flow = CallFlow(date.fromisoformat(claim["reference_date"]), clips=clips, ai_conversation=conv)
+        if hasattr(self.ai, "voice"):  # AI 목소리를 녹음과 같게(여성 Aoede / 남성 Charon)
+            self.ai.voice = "Charon" if pack["manifest"].get("gender") == "male" else "Aoede"
         self.max_call_ms = int(claim.get("max_call_seconds") or 300) * 1000
         self.candidate_event: dict[int, str] = {}
         self.pending_vad_end: int | None = None
@@ -481,6 +488,8 @@ class CallRunner:
 
     def _filler(self, frames: list[Frame]) -> None:
         """상대가 말을 마치면 인식(약 2초) 전에 짧은 '네,'를 바로 내보내 공백을 메운다. 녹음 'ack'가 있을 때만."""
+        if not (self.cfg.filler or os.environ.get("AICC_FILLER") == "1"):
+            return
         if self.is_mock or not getattr(self.device, "tx_async", lambda: False)() or not self.voice.has("ack"):
             return
         voiced = sum(1 for f in frames if f.pcm and rms(f.pcm) >= self.cfg.vad_threshold) * FRAME_MS
@@ -495,11 +504,38 @@ class CallRunner:
         except DeviceError as e:
             log.warning("[통화 %s] 맞장구 재생 실패: %s", self.call_id[:8], e)
 
+    def _remember(self, type_: str, payload: dict) -> None:
+        """AI 에 넘길 최근 대화(상담원 안내 문구 / 간병사 말)."""
+        log_ = getattr(self, "_log", None)
+        if log_ is None:
+            return
+        if type_ == "play":
+            clips = (getattr(self, "voice", None) and self.voice.manifest.get("clips")) or {}
+            if payload.get("key") == "confirm_date" and payload.get("params"):
+                txt = f"{payload['params'].get('month')}월 {payload['params'].get('day')}일부터 근무 가능하신 게 맞으실까요?"
+            else:
+                txt = (clips.get(payload.get("key")) or {}).get("text") or payload.get("key")
+            log_.append(("say", txt))
+        elif type_ == "utterance.final":
+            log_.append(("hear", payload.get("text", "")))
+        elif type_ == "ai.done" and payload.get("text"):
+            log_.append(("say", payload["text"]))
+
+    def _dialog_lines(self) -> list[str]:
+        out = []
+        for e in self._log:
+            if e[0] == "say":
+                out.append(f"상담원: {e[1]}")
+            else:
+                out.append(f"간병사: {e[1]}")
+        return out
+
     def _ai(self, a: StartAI) -> None:
         self._emit("ai.start", a.turn, {"return_state": a.return_state})
         self._flush()
         with cf.ThreadPoolExecutor(max_workers=1) as ex:
-            fut = ex.submit(self.ai.respond, a.question, timeout_s=self.cfg.ai_timeout_s)
+            ctx = build_prompt(a.question, a.return_state, self._dialog_lines())
+            fut = ex.submit(self.ai.respond, a.question, timeout_s=self.cfg.ai_timeout_s, context=ctx)
             try:
                 reply = fut.result(timeout=self.cfg.ai_wait_after_ms / 1000)
             except cf.TimeoutError:
@@ -518,6 +554,14 @@ class CallRunner:
             self._apply(self.flow.ai_failed(turn=a.turn))
             return
         pcm = reply.pcm or tone(max(400, 60 * len(reply.text or "")), 660.0, 1500)
+        if self.flow.ai_conversation and not self.is_mock and getattr(self.device, "tx_async", lambda: False)():
+            # 대화형: 상태를 먼저 되돌린 뒤 재생 → AI 말 도중 끼어든 답도 원래 질문의 답으로 처리
+            self._emit("ai.done", a.turn, {"text": reply.text, "latency_ms": reply.latency_ms, "engine": self.ai.name})
+            log.info("[통화 %s] AI: %s (%dms)", self.call_id[:8], reply.text, reply.latency_ms)
+            acts = self.flow.ai_done(turn=a.turn)
+            self._play_async(Play("ai", a.turn, {}), pcm, split_frames(pcm, self.device.now_ms()), self.device.now_ms())
+            self._apply(acts)
+            return
         frames = split_frames(pcm, self.device.now_ms())
         for f in frames:
             f.t_ms = self.device.now_ms()
@@ -525,6 +569,7 @@ class CallRunner:
             self.recorder.add_tx([f])
         self.device.tx_segment_done("ai")
         self._emit("ai.done", a.turn, {"text": reply.text, "latency_ms": reply.latency_ms, "engine": self.ai.name})
+        log.info("[통화 %s] AI: %s (%dms)", self.call_id[:8], reply.text, reply.latency_ms)
         self._apply(self.flow.ai_done(turn=a.turn))
 
     # ---------------- 마무리 ----------------

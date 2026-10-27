@@ -16,11 +16,34 @@ import time
 from dataclasses import dataclass
 
 SYSTEM_PROMPT = (
-    "당신은 간병사 근무 일정 확인 전화의 자동 안내입니다. 일정 확인만 담당하며 일자리 배정·확정·급여·계약을 "
-    "약속하지 않습니다. 병원·환자 정보와 일자리 조건은 '전담 실장님이 따로 연락드린다'고만 안내합니다. "
-    "실제 사람이라고 주장하지 않습니다. 한국어 존댓말로 최대 두 문장으로 짧게 답하고, 날짜를 정하거나 "
-    "확정하지 마십시오. 개인정보를 묻지 마십시오."
+    "당신은 '좋은간병'의 간병사 근무 일정 확인 전화 상담원입니다(자동 안내). 전화 받은 간병사님과 자연스럽게, "
+    "따뜻하고 짧게 대화합니다.\n"
+    "목표: 1) 지금 간병 근무 중인지 2) 근무 중이면 언제 끝나는지 3) 다음 근무를 언제부터 할 수 있는지 알아내는 것.\n"
+    "규칙:\n"
+    "- 한두 문장, 말하듯이. 매번 '네'로 시작하지 마십시오. 같은 말을 되풀이하지 마십시오.\n"
+    "- 상대 말에 먼저 자연스럽게 반응하고, 끝에 '지금 확인할 것'을 부드럽게 한 번 묻습니다.\n"
+    "- 날짜를 정하거나 '반영했다/확정했다'고 말하지 마십시오(날짜 확인은 시스템이 따로 합니다).\n"
+    "- 일자리 배정·급여·병원·환자 조건은 약속하지 말고 '실제 일감 소개할 때 안내드린다'고 합니다.\n"
+    "- 사람이냐고 물으면 자동 안내라고 솔직히 말합니다. 개인정보를 묻지 않습니다.\n"
+    "- 간병사가 아니라고 하면 사과하고, 연락을 원치 않으면 정중히 받아들입니다."
 )
+
+STATE_GOAL = {
+    "OPENING": "통화 괜찮은지 확인하고, 지금 간병 근무 중이신지",
+    "ASK_WORKING": "지금 간병 근무 중이신지",
+    "ASK_END_DATE": "지금 하시는 근무가 언제 끝나는지",
+    "ASK_AVAILABLE_DATE": "다음 근무를 언제부터 하실 수 있는지",
+    "WAIT_AVAILABILITY": "다음 근무를 언제부터 하실 수 있는지",
+    "CONFIRM_DATE": "말씀하신 날짜부터 근무 가능하신 게 맞는지",
+}
+
+
+def build_prompt(question: str, state: str | None, transcript: list[str] | None) -> str:
+    """AI 에 넘길 현재 상황(확인할 것 + 최근 대화)."""
+    goal = STATE_GOAL.get(state or "", "다음 근무 가능 일정")
+    lines = "\n".join((transcript or [])[-8:])
+    return (f"[지금 확인할 것] {goal}\n[최근 대화]\n{lines}\n[간병사님 방금 한 말] {question}\n"
+            "위 규칙대로 상담원으로서 바로 할 말만 답하세요.")
 
 
 @dataclass
@@ -36,7 +59,7 @@ class ExceptionAI(abc.ABC):
     name = "abstract"
 
     @abc.abstractmethod
-    def respond(self, question: str, *, timeout_s: float = 10.0) -> AIReply: ...
+    def respond(self, question: str, *, timeout_s: float = 10.0, context: str | None = None) -> AIReply: ...
 
 
 def limit_sentences(text: str, n: int = 2) -> str:
@@ -49,7 +72,7 @@ class MockAI(ExceptionAI):
 
     name = "mock"
 
-    def respond(self, question: str, *, timeout_s: float = 10.0) -> AIReply:
+    def respond(self, question: str, *, timeout_s: float = 10.0, context: str | None = None) -> AIReply:
         q = question
         if re.search(r"급여|일당|시급|돈|병원|환자|조건|배정|일자리", q):
             text = "그 부분은 제가 안내드리기 어렵고, 전담 실장님이 따로 연락드릴 거예요."
@@ -65,7 +88,7 @@ class MockAI(ExceptionAI):
 class FailingAI(ExceptionAI):
     name = "failing"
 
-    def respond(self, question: str, *, timeout_s: float = 10.0) -> AIReply:
+    def respond(self, question: str, *, timeout_s: float = 10.0, context: str | None = None) -> AIReply:
         return AIReply(False, None, None, int(timeout_s * 1000), "timeout")
 
 
@@ -75,10 +98,11 @@ class GeminiLiveAI(ExceptionAI):  # pragma: no cover - 외부 API, 키·모델 �
     def __init__(self, api_key: str | None = None, model: str | None = None):
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
         self.model = model or os.environ.get("AICC_GEMINI_MODEL")
+        self.voice = os.environ.get("AICC_GEMINI_VOICE", "Aoede")  # 러너가 음원팩(여성/남성)에 맞춰 바꿈
         if not self.api_key or not self.model:
             raise RuntimeError("GEMINI_API_KEY 와 AICC_GEMINI_MODEL(공식 문서에서 확인한 Live 모델명)이 필요합니다")
 
-    def respond(self, question: str, *, timeout_s: float = 10.0) -> AIReply:
+    def respond(self, question: str, *, timeout_s: float = 10.0, context: str | None = None) -> AIReply:
         import asyncio
 
         from google import genai  # 지연 import
@@ -88,7 +112,7 @@ class GeminiLiveAI(ExceptionAI):  # pragma: no cover - 외부 API, 키·모델 �
             client = genai.Client(api_key=self.api_key)
             # 기존 녹음과 같은 목소리(여성 Aoede / 남성 Charon)
             voice = types.SpeechConfig(voice_config=types.VoiceConfig(
-                prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=os.environ.get("AICC_GEMINI_VOICE", "Aoede"))))
+                prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=self.voice)))
             cfg = types.LiveConnectConfig(response_modalities=["AUDIO"],
                                           system_instruction=SYSTEM_PROMPT,
                                           speech_config=voice,
@@ -96,7 +120,7 @@ class GeminiLiveAI(ExceptionAI):  # pragma: no cover - 외부 API, 키·모델 �
             pcm = bytearray()
             text = []
             async with client.aio.live.connect(model=self.model, config=cfg) as session:
-                await session.send_client_content(turns={"role": "user", "parts": [{"text": question}]},
+                await session.send_client_content(turns={"role": "user", "parts": [{"text": context or question}]},
                                                   turn_complete=True)
                 async for msg in session.receive():
                     sc = getattr(msg, "server_content", None)

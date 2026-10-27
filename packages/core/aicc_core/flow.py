@@ -121,7 +121,8 @@ class Observation:
 
 class CallFlow:
     def __init__(self, reference: date, *, max_reprompt: int = 2, max_ai: int = 2, max_corrections: int = 3,
-                 clips: set[str] | frozenset[str] | None = None, max_scenarios: int = 4):
+                 clips: set[str] | frozenset[str] | None = None, max_scenarios: int = 4,
+                 ai_conversation: bool = False, max_ai_conversation: int = 6):
         self.reference = reference
         self.state = "QUEUED"
         self.turn = 0
@@ -140,6 +141,11 @@ class CallFlow:
         self.clips = frozenset(clips or ())
         self.max_scenarios = max_scenarios
         self.scenario_count = 0
+        # 대화형 AI: 규칙으로 못 알아들은 말을 '다시 말씀해 주세요' 대신 AI(같은 목소리)가 자연스럽게 받아 주고
+        # 원래 확인하려던 질문으로 이끈다. 날짜 확정은 여전히 이 상태기계만 한다(AI 는 말만 함).
+        self.ai_conversation = ai_conversation
+        if ai_conversation:
+            self.max_ai = max(self.max_ai, max_ai_conversation)
 
     # ---------- 공개 이벤트 ----------
     @property
@@ -229,12 +235,19 @@ class CallFlow:
             return []
         self.state = self.return_state or "ASK_WORKING"
         self.return_state = None
+        if self.ai_conversation:
+            return []  # AI 가 답 끝에 확인할 내용을 이미 물었다 → 같은 질문 녹음을 반복하지 않고 답을 기다림
         return [self._question()]
 
     def ai_failed(self, *, turn: int) -> list[Action]:
         if self.finished or self.state != "AI_EXCEPTION" or turn != self.turn:
             return []
         self.review_reasons.append("AI_FAILED")
+        if self.ai_conversation and self.return_state in DIALOGUE_STATES:
+            # 대화형 보조가 실패하면 통화를 끝내지 않고 원래 질문(녹음)으로 돌아간다
+            self.state = self.return_state
+            self.return_state = None
+            return [self._question()]
         return [StopTx("ai_failed"), self._play("ai_failed"), HangUp("ai_failed"), *self._end("CONSULT_REQUESTED")]
 
     def remote_hangup(self) -> list[Action]:
@@ -277,6 +290,8 @@ class CallFlow:
         if it.intent == "YES":
             return self._go("ASK_WORKING")
         if it.intent == "NO":
+            if self.ai_conversation:
+                return self._reprompt(it)  # '아닌데요'만으로는 뜻이 모호 → AI 가 되물음
             return [self._play("callback"), HangUp("declined"), *self._end("CALLBACK_REQUESTED")]
         return self._reprompt(it)
 
@@ -510,6 +525,8 @@ class CallFlow:
         return [self._question()]
 
     def _reprompt(self, it: Interpretation, same_question: bool = False) -> list[Action]:
+        if self.ai_conversation and it.text.strip() and self.ai_count < self.max_ai:
+            return self._exception(it.text)  # 못 알아들은 말 → AI 가 자연스럽게 응대
         n = self.reprompts.get(self.state, 0)
         if n >= self.max_reprompt:
             self.review_reasons.append(f"UNCLEAR_{self.state}")
