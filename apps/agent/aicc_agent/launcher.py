@@ -128,6 +128,7 @@ def _rebuild_web_if_stale() -> None:  # pragma: no cover - npm 실행
     """git pull 로 화면 소스가 바뀌었는데 빌드가 예전 것이면 다시 빌드한다(예전 화면이 보이는 문제 방지)."""
     import shutil
     import subprocess
+
     from .scrcpy_rx import REPO_ROOT
     web = REPO_ROOT / "apps" / "web"
     index = web / "dist" / "index.html"
