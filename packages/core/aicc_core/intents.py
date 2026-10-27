@@ -118,7 +118,7 @@ def interpret(text: str, state: str, reference: date) -> Interpretation:
             return r("NO")
         if yes:
             return r("YES")
-    if state in ("ASK_WORKING", "OPENING"):
+    if state in ("ASK_WORKING", "OPENING", "WAIT_AVAILABILITY"):
         if _NOT_WORKING.search(t):
             return r("NOT_WORKING")
         if _WORKING.search(t):

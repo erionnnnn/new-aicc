@@ -71,6 +71,13 @@ export const CLIP_LABEL: Record<string, string> = {
   ask_available_date: "가능일 질문", confirm_date: "날짜 재확인", ask_repeat: "다시 말씀 요청",
   explain_role: "역할 안내", callback: "재연락 안내", refusal_ack: "연락거부 확인", closing: "마무리 인사",
   ai_wait: "잠시만요", ai_failed: "AI 실패 안내", wrong_person: "잘못된 연결 사과", ack: "맞장구(네,)",
+  sc_ask_pay: "급여 질문 답변", sc_ask_hospital: "병원 질문 답변", sc_ask_patient: "환자 질문 답변", sc_ask_hours: "근무시간 질문 답변",
+  sc_ask_job: "일감 질문 답변", sc_why_call: "전화 이유 답변", sc_who_are_you: "누구세요 답변", sc_how_got_number: "번호 출처 답변",
+  sc_no_job_why_ask: "일감 없는데 왜 답변", sc_job_when_available: "일감 있을 때 연락 답변", sc_ai_question: "자동 안내 여부 답변",
+  sc_emotional_hard: "공감", sc_didnt_hear: "다시 설명", sc_silence_check: "침묵 확인", sc_silence_end: "침묵 종료",
+  sc_no_severe: "환자조건 선호", sc_no_night: "야간 불가", sc_weekday_only: "평일만", sc_weekend_only: "주말만",
+  sc_preferred_hospital: "선호 병원", sc_high_pay_only: "급여 선호", sc_text_request: "문자 요청", sc_rest: "당분간 휴식",
+  sc_unknown_schedule: "일정 미정", sc_driving: "운전 중", sc_available_now: "즉시 가능(미사용)",
 };
 
 export function koDate(iso: string): string {

@@ -203,8 +203,9 @@ def _to_wav16k(data: bytes) -> bytes:
 
 
 class TTSIn(BaseModel):
-    engine: str = Field(default="edge", pattern="^(edge|sapi|test)$")
+    engine: str = Field(default="edge", pattern="^(gemini|edge|sapi|test)$")
     only_missing: bool = False
+    max_items: int = Field(default=0, ge=0, le=200)  # 0 = 전부. Gemini 는 분당 한도가 있어 화면이 나눠 요청한다
 
 
 @router.post("/voice-packs/{key}/tts")
@@ -224,15 +225,20 @@ def generate_tts(key: str, body: TTSIn, p: Principal = Depends(current_user), db
     if not m.get("speaker_name"):
         raise AppError(422, "SPEAKER_REQUIRED", "안내 인물 이름을 먼저 저장하세요")
     made, failed = 0, []
+    env = _read_agent_env() if body.engine == "gemini" else {}
+    remaining = 0
     for clip, c in m["clips"].items():
         if body.only_missing and c.get("file"):
+            continue
+        if body.max_items and made + len(failed) >= body.max_items:
+            remaining += 1
             continue
         text = _apply_company(c.get("text") or "", p.org.company_name.strip())
         if not text.strip():
             failed.append({"clip": clip, "error": "문구 없음"})
             continue
         try:
-            wav16k = tts.synthesize(body.engine, text, key)
+            wav16k = tts.synthesize(body.engine, text, key, api_key=env.get("GEMINI_API_KEY") or None)
         except tts.TTSError as e:
             failed.append({"clip": clip, "error": str(e)})
             if made == 0:  # 첫 문구부터 실패하면 같은 원인이므로 바로 중단
@@ -252,7 +258,106 @@ def generate_tts(key: str, body: TTSIn, p: Principal = Depends(current_user), db
         out = _pack_out(db, p, cur)
     if failed and not made:
         raise AppError(502, "TTS_FAILED", failed[0]["error"], {"failed": failed[:5]})
-    return {**out, "generated": made, "failed": failed}
+    return {**out, "generated": made, "failed": failed, "remaining": remaining}
+
+
+def _cut_leading_ack(wav16k: bytes) -> bytes | None:
+    """'네, 감사합니다…' 녹음에서 앞의 '네,'만 잘라 낸다(첫 말소리 뒤 첫 쉼에서 자름). 못 찾으면 None."""
+    from aicc_agent.audio import rms
+    with wave.open(io.BytesIO(wav16k)) as w:
+        pcm = w.readframes(w.getnframes())
+    fb = 640  # 20ms
+    levels = [rms(pcm[i:i + fb]) for i in range(0, len(pcm) - fb + 1, fb)]
+    if not levels:
+        return None
+    peak = max(levels)
+    on, off = peak * 0.12, peak * 0.12
+    start = next((i for i, v in enumerate(levels) if v >= on), None)
+    if start is None:
+        return None
+    # 실제 녹음(2026-10-27) 확인: '네,' 뒤 쉼이 40ms 정도로 짧은 경우가 있어 짧은 골짜기도 끝으로 본다
+    for i in range(start + 8, min(len(levels) - 1, start + 60)):  # 말소리 160ms 이후 ~1.2초 안
+        if levels[i] < off and levels[i + 1] < off:
+            end = (i + 2) * fb
+            lead = max(0, (start - 2) * fb)
+            body = bytearray(pcm[lead:end])
+            n = len(body) // 2
+            fade = min(320, n)  # 20ms 페이드아웃
+            import struct
+            for k in range(fade):
+                idx = n - fade + k
+                v = struct.unpack_from("<h", body, idx * 2)[0]
+                struct.pack_into("<h", body, idx * 2, int(v * (fade - k) / fade))
+            return _wav_bytes(bytes(body))
+    return None
+
+
+def _wav_bytes(pcm: bytes) -> bytes:
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(16000)
+        w.writeframes(pcm)
+    return buf.getvalue()
+
+
+@router.post("/voice-packs/{key}/import-legacy")
+async def import_legacy(key: str, file: UploadFile = File(...), p: Principal = Depends(current_user),
+                        db: Session = Depends(get_db)) -> dict:
+    """기존 프로그램 녹음 zip(recordings/*.wav)을 안내 자리·상황 응답에 자동 배정한다(대사는 scenarios.py)."""
+    import zipfile
+
+    from aicc_core.scenarios import ACK_SOURCE, LEGACY_MAP, SCENARIOS
+
+    require(p, "settings")
+    cur = services.latest_pack(db, p.org.id, key)
+    if cur is None:
+        raise AppError(404, "NOT_FOUND", "음원팩이 없습니다")
+    data = await file.read(200 * 1024 * 1024)
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(data))
+    except zipfile.BadZipFile as e:
+        raise AppError(422, "ZIP_INVALID", "zip 파일이 아닙니다") from e
+    suffix = "_MALE" if key == "male" else ""
+    files: dict[str, str] = {}
+    for info in zf.infolist():
+        name = info.filename.replace("\\", "/").rsplit("/", 1)[-1]
+        if info.is_dir() or not name.lower().endswith(".wav") or info.file_size > 20 * 1024 * 1024:
+            continue
+        stem = name[:-4].upper()
+        if suffix and not stem.endswith(suffix):
+            continue
+        if not suffix and stem.endswith("_MALE"):
+            continue
+        files[stem[: len(stem) - len(suffix)] if suffix else stem] = info.filename
+    if not files:
+        raise AppError(422, "ZIP_EMPTY", "zip 안에 이 목소리용 WAV 가 없습니다(여성: OPENING.wav, 남성: OPENING_MALE.wav 형식)")
+    m = with_optional(cur.manifest)
+    imported, missing = [], []
+    plan = [(clip, code, text) for clip, (code, text) in LEGACY_MAP.items()]
+    plan += [(sc.key, sc.code, sc.text) for sc in SCENARIOS]
+    for clip, code, text in plan:
+        if code not in files:
+            missing.append(code)
+            continue
+        wav16k = _to_wav16k(zf.read(files[code]))
+        m["clips"][clip].update(_store_clip(p, key, clip, wav16k), text=text, source=f"legacy:{code}")
+        imported.append(clip)
+    if ACK_SOURCE in files:
+        ack = _cut_leading_ack(_to_wav16k(zf.read(files[ACK_SOURCE])))
+        if ack:
+            m["clips"]["ack"].update(_store_clip(p, key, "ack", ack), text="네,", source=f"legacy:{ACK_SOURCE}:cut")
+            imported.append("ack")
+    if not imported:
+        raise AppError(422, "ZIP_NO_MATCH", "배정할 녹음을 찾지 못했습니다")
+    m["company_name"] = p.org.company_name
+    m["approved_by"] = None
+    vp = _new_version(db, p, key, m)
+    audit(db, p, "voicepack.import_legacy", "voice_pack", vp.id, {"key": key, "imported": len(imported),
+                                                                  "missing": missing})
+    db.commit()
+    return {**_pack_out(db, p, vp), "imported": imported, "missing_legacy": missing}
 
 
 class PackPatch(BaseModel):

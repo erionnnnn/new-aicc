@@ -96,6 +96,9 @@ def build(db: Session, p: Principal, *, batch: ImportBatch, campaign: Campaign |
                 notes = list(call.review_reasons or []) if call else []
                 if cg.review_note:
                     notes.append(cg.review_note)
+                cond = [n for h in ((o.history or []) if o else []) if h.get("event") == "NOTES" for n in h.get("notes", [])]
+                if cond:
+                    notes.append("조건: " + ", ".join(dict.fromkeys(cond)))
                 er.added = {
                     "현재근무상태": WORK_KO.get((o.work_status if o else None) or "", ""),
                     "근무종료일": o.end_date if o and o.end_date else None,

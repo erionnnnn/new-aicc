@@ -179,7 +179,8 @@ def test_voice_pack_auto_created_tts_and_approve(admin):
     r = admin.post("/api/v1/voice-packs/female/tts", json={"engine": "test"})
     assert r.status_code == 200, r.text
     out = r.json()
-    assert out["generated"] == 57 and out["missing_count"] == 0
+    from aicc_core.voicepack import DATE_PIECE_KEYS, OPTIONAL_KEYS, REQUIRED_KEYS
+    assert out["generated"] == len(REQUIRED_KEYS) + len(DATE_PIECE_KEYS) + len(OPTIONAL_KEYS) and out["missing_count"] == 0
     assert "좋은케어" in out["clips"]["opening"]["text"] and "[회사명]" not in out["clips"]["opening"]["text"]
     assert out["problems"] == ["관리자 승인 기록이 없습니다"]
     ok = admin.post("/api/v1/voice-packs/female/approve").json()
@@ -216,3 +217,51 @@ def test_account_cli_list_and_reset(admin, monkeypatch, capsys):
     r = admin.c.post("/api/v1/auth/login", json={"username": "admin", "password": "new-pass-12345"})
     assert r.status_code == 200
     assert admin_cli.main(["reset", "nobody"]) == 1
+
+
+def _wav(ms_segments, rate=24000):
+    """[(ms, amp)] 구간을 이어 붙인 모노 WAV."""
+    import io as _io
+    import math as _m
+    import struct as _st
+    import wave as _w
+    vals = []
+    for ms, amp in ms_segments:
+        n = rate * ms // 1000
+        vals += [int(amp * _m.sin(2 * _m.pi * 220 * i / rate)) for i in range(n)]
+    buf = _io.BytesIO()
+    with _w.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(_st.pack(f"<{len(vals)}h", *vals))
+    return buf.getvalue()
+
+
+def test_import_legacy_recordings_zip(admin):
+    import io as _io
+    import zipfile
+
+    from aicc_core.scenarios import LEGACY_MAP, SCENARIOS
+    admin.get("/api/v1/voice-packs")
+    admin.put("/api/v1/settings", json={"company_name": "좋은간병"})
+    buf = _io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        codes = {c for c, _ in LEGACY_MAP.values()} | {s.code for s in SCENARIOS}
+        for code in codes:
+            body = _wav([(100, 0), (300, 8000), (250, 0), (900, 8000)]) if code == "ACK_CONTINUE" else _wav([(400, 6000)])
+            z.writestr(f"recordings/{code}.wav", body)
+            z.writestr(f"recordings/{code}_MALE.wav", _wav([(300, 6000)]))
+        z.writestr("recordings/README.txt", "x")
+    r = admin.c.post("/api/v1/voice-packs/female/import-legacy", files={"file": ("recordings.zip", buf.getvalue())},
+                     headers=admin._h())
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert "opening" in out["imported"] and "sc_ask_pay" in out["imported"] and "ack" in out["imported"]
+    assert out["clips"]["opening"]["text"].startswith("안녕하세요, 간병사님")
+    ack_ms = out["clips"]["ack"]["duration_ms"]
+    assert 300 <= ack_ms <= 600  # 앞의 '네,'(0.3초)만 잘림, 뒤 문장은 제외
+    assert out["clips"]["ask_working"]["has_file"] is False  # 녹음 없는 자리는 비어 있음(Gemini 로 채움)
+    r = admin.c.post("/api/v1/voice-packs/male/import-legacy", files={"file": ("recordings.zip", buf.getvalue())},
+                     headers=admin._h())
+    assert r.status_code == 200 and "opening" in r.json()["imported"]

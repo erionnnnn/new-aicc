@@ -1,6 +1,7 @@
 """안내 음성 자동 생성(TTS). 녹음 없이 음원팩 전체(필수 문구 + 날짜 조각)를 만든다.
 
 엔진
+- gemini: 기존 녹음과 같은 Gemini 목소리(여성 Aoede, 남성 Charon). 이 PC 의 Gemini 키 사용, 인터넷 필요.
 - edge: Microsoft Edge 온라인 신경망 음성(edge-tts) + miniaudio 로 16kHz 모노 WAV 변환. 인터넷 필요.
   여성 ko-KR-SunHiNeural, 남성 ko-KR-InJoonNeural. 특정 인물 목소리가 아닌 일반 합성 음성이다.
 - sapi: Windows 내장 음성(System.Speech, 예: Microsoft Heami). 인터넷 불필요, 음질은 낮다.
@@ -89,7 +90,71 @@ def synth_sapi(text: str, pack_key: str) -> bytes:  # pragma: no cover - Windows
     return _wav16k(base64.b64decode(r.stdout.strip()))
 
 
-def synthesize(engine: str, text: str, pack_key: str) -> bytes:
+GEMINI_VOICES = {"female": "Aoede", "male": "Charon"}  # 기존 프로그램 v11.44 와 같은 목소리(VOICE_SELECTION_v11_44.md)
+# 모델 이름은 자주 바뀐다(2026-10 확인: gemini-3.1-flash-tts-preview, gemini-2.5-pro-preview-tts 등). 앞에서부터 시도.
+GEMINI_TTS_MODELS = ("gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts", "gemini-2.5-pro-preview-tts")
+_gemini_model_ok: str | None = None
+
+
+def _pcm24_to_wav16k(data: bytes) -> bytes:
+    """Gemini 음성(WAV 머리글 있거나 없는 24kHz 16bit 모노 PCM)을 16kHz WAV 로."""
+    rate, pcm = 24000, data
+    if data[:4] == b"RIFF":
+        with wave.open(io.BytesIO(data)) as w:
+            rate, pcm = w.getframerate(), w.readframes(w.getnframes())
+            if w.getnchannels() != 1 or w.getsampwidth() != 2:
+                raise TTSError("Gemini 음성 형식이 16bit 모노가 아닙니다")
+    from aicc_agent.audio import resample_linear
+    return _wav16k(resample_linear(pcm, rate, TARGET_RATE) if rate != TARGET_RATE else pcm)
+
+
+def synth_gemini(text: str, pack_key: str, api_key: str | None, model: str | None = None) -> bytes:  # pragma: no cover
+    """기존 녹음과 같은 Gemini 목소리(여성 Aoede / 남성 Charon)로 만든다. 이 PC 에 저장된 Gemini 키 사용."""
+    global _gemini_model_ok
+    if not api_key:
+        raise TTSError("Gemini 키가 없습니다(설정 > 단말 > 이 PC 에이전트에서 입력)")
+    try:
+        from google import genai
+        from google.genai import types
+    except ImportError as e:
+        raise TTSError("google-genai 가 설치되지 않았습니다(설치 스크립트를 다시 실행)") from e
+    import time
+    client = genai.Client(api_key=api_key)
+    voice = GEMINI_VOICES.get(pack_key, "Aoede")
+    cfg = types.GenerateContentConfig(
+        response_modalities=["AUDIO"],
+        speech_config=types.SpeechConfig(voice_config=types.VoiceConfig(
+            prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice))))
+    models = [m for m in (model, _gemini_model_ok, *GEMINI_TTS_MODELS) if m]
+    last = ""
+    for m in dict.fromkeys(models):
+        for attempt in range(4):
+            try:
+                resp = client.models.generate_content(
+                    model=m, contents=f"차분하고 친절한 한국어 상담원 말투로, 문장 그대로만 읽어 주세요: {text}", config=cfg)
+                part = resp.candidates[0].content.parts[0]
+                data = part.inline_data.data
+                if isinstance(data, str):
+                    data = base64.b64decode(data)
+                if not data:
+                    raise TTSError("빈 음성")
+                _gemini_model_ok = m
+                return _pcm24_to_wav16k(data)
+            except TTSError:
+                raise
+            except Exception as e:  # noqa: BLE001
+                msg = str(e)
+                last = f"{m}: {type(e).__name__} {msg[:160]}"
+                if "429" in msg or "RESOURCE_EXHAUSTED" in msg or "503" in msg:
+                    time.sleep(8 * (attempt + 1))  # 분당 요청 한도 — 기다렸다 재시도
+                    continue
+                break  # 모델 없음·권한 등 → 다음 모델
+    raise TTSError(f"Gemini 음성 생성 실패 — {last}")
+
+
+def synthesize(engine: str, text: str, pack_key: str, *, api_key: str | None = None, model: str | None = None) -> bytes:
+    if engine == "gemini":
+        return synth_gemini(text, pack_key, api_key, model)
     if engine == "edge":
         return synth_edge(text, pack_key)
     if engine == "sapi":

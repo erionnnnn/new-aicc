@@ -5,7 +5,7 @@ import { DateCell, Empty, ErrorBox, Field, Notice, OutcomeBadge, Page, useAsync 
 
 const REASON: Record<string, string> = {
   AI_FAILED: "AI 응답 실패", AI_LIMIT: "예외 질문 횟수 초과", NO_RESPONSE: "무응답", WRONG_PERSON: "잘못된 상대",
-  DATE_RANGE_ONLY: "날짜 범위만 응답", DATE_UNKNOWN: "날짜 모름", MAX_CALL_DURATION: "최대 통화 시간 초과",
+  DATE_RANGE_ONLY: "날짜 범위만 응답", DATE_UNKNOWN: "날짜 모름", TEXT_REQUESTED: "문자 안내 요청", RESTING: "당분간 휴식", MAX_CALL_DURATION: "최대 통화 시간 초과",
   ANSWER_DETECTION_UNKNOWN: "응답 감지 불가", HANGUP_FAILED_MANUAL: "종료 명령 실패(단말에서 직접 확인)",
   TOO_MANY_CORRECTIONS: "날짜 정정 반복", SERVER_ERROR: "서버 오류",
 };

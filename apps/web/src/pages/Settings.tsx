@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { api, ApiError, Me } from "../api";
+import { api, ApiError, CLIP_LABEL, Me } from "../api";
 import { go } from "../App";
 import { ErrorBox, Field, Notice, Page, useAsync } from "../ui";
 
@@ -79,12 +79,30 @@ function Voice({ me }: { me: Me }) {
   const [busy, setBusy] = useState(false);
   const [ttsMsg, setTtsMsg] = useState("");
 
-  async function tts(engine: string) {
+  async function tts(engine: string, onlyMissing = false) {
     if (!pack) return;
     setErr(null); setTtsMsg(""); setBusy(true);
     try {
-      const r = await api.post(`/api/v1/voice-packs/${pack.key}/tts`, { engine });
-      setTtsMsg(r.failed.length ? `일부 실패: ${r.generated}개 생성, ${r.failed.length}개 실패(${r.failed[0].error})` : `완료: ${r.generated}개 생성. 들어 보고 승인하세요.`);
+      // Gemini 는 분당 요청 한도가 있어 6개씩 나눠 요청하며 진행 상황을 보여 준다
+      let made = 0; const failed: any[] = [];
+      for (;;) {
+        const r = await api.post(`/api/v1/voice-packs/${pack.key}/tts`,
+          { engine, only_missing: onlyMissing || engine === "gemini", max_items: engine === "gemini" ? 6 : 0 });
+        made += r.generated; failed.push(...r.failed);
+        packs.reload();
+        if (engine !== "gemini" || !r.remaining || r.generated === 0) break;
+        setTtsMsg(`진행 중: ${made}개 생성, 남은 ${r.remaining}개…`);
+      }
+      setTtsMsg(failed.length ? `일부 실패: ${made}개 생성, ${failed.length}개 실패(${failed[0].error})` : `완료: ${made}개 생성. 들어 보고 승인하세요.`);
+    } catch (e) { setErr(e as ApiError); } finally { setBusy(false); }
+  }
+
+  async function importLegacy(f: File) {
+    if (!pack) return;
+    setErr(null); setTtsMsg(""); setBusy(true);
+    try {
+      const r = await api.upload(`/api/v1/voice-packs/${pack.key}/import-legacy`, f);
+      setTtsMsg(`완료: 기존 녹음 ${r.imported.length}개를 배정했습니다. 녹음 없는 칸 ${r.missing_count}개는 아래 ‘빈칸만 Gemini 목소리로 채우기’로 만드세요.`);
       packs.reload();
     } catch (e) { setErr(e as ApiError); } finally { setBusy(false); }
   }
@@ -122,8 +140,21 @@ function Voice({ me }: { me: Me }) {
           <p className="muted small">‘김태희 실장’은 업무상 안내 역할 이름입니다. 특정 인물의 목소리를 흉내 내지 않고 승인된 녹음만 사용합니다. 녹음 파일은 WAV·MP3·FLAC 을 올리면 자동 변환됩니다.</p>
           {admin && (
             <div className="panel tts-box">
+              <h3>기존 프로그램 녹음 가져오기</h3>
+              <p className="muted small">기존 프로그램의 recordings 폴더 zip(OPENING.wav, ASK_PAY.wav … / 남성은 _MALE)을 올리면 안내 자리와 상황 응답(급여·병원 질문, 운전 중 등)에 자동 배정하고,
+                ACK_CONTINUE 앞의 ‘네,’를 잘라 맞장구로 씁니다. 그다음 녹음이 없는 칸(근무 여부 질문, 날짜 재확인, 날짜 조각 등)을 같은 Gemini 목소리({pack.key === "female" ? "Aoede" : "Charon"})로 채우세요.</p>
+              <div className="toolbar">
+                <label className="btn primary">
+                  {busy ? "처리 중…" : "녹음 zip 올리기"}
+                  <input type="file" accept=".zip" hidden disabled={busy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) importLegacy(f); }} />
+                </label>
+                <button className="btn" disabled={busy} onClick={() => tts("gemini", true)}>
+                  {busy ? "만드는 중… (수 분)" : `빈칸만 Gemini 목소리(${pack.key === "female" ? "Aoede" : "Charon"})로 채우기`}
+                </button>
+              </div>
+              <p className="muted small">Gemini 목소리는 설정 &gt; 단말 &gt; 이 PC 에이전트에 저장한 Gemini 키로 만듭니다(인터넷 필요).</p>
               <h3>자동 음성으로 한 번에 만들기</h3>
-              <p className="muted small">아래 문구 13개와 날짜 조각 43개를 합성 음성으로 만듭니다. 오프닝의 [회사명]은 운영 정책의 회사명으로 바뀝니다.
+              <p className="muted small">아래 문구 전체와 날짜 조각 43개를 합성 음성으로 만듭니다(기존 녹음이 있으면 위 ‘가져오기’를 쓰세요). 오프닝의 [회사명]은 운영 정책의 회사명으로 바뀝니다.
                 만든 뒤 몇 개를 들어 보고 ‘이 버전 승인’을 눌러야 실제 통화에 쓰입니다.</p>
               <div className="toolbar">
                 <button className="btn primary" disabled={busy} onClick={() => tts("edge")}>
@@ -151,7 +182,7 @@ function Voice({ me }: { me: Me }) {
                 const c = pack.clips[k] ?? {};
                 return (
                   <tr key={k}>
-                    <td className="num">{k}{(pack.optional_keys ?? []).includes(k) && <div className="muted small">선택 · 말이 끝나면 바로 내는 맞장구</div>}</td>
+                    <td className="num">{k}{(pack.optional_keys ?? []).includes(k) && <div className="muted small">선택 · {k === "ack" ? "말이 끝나면 바로 내는 맞장구" : `상황 응답: ${CLIP_LABEL[k] ?? k}`}</div>}</td>
                     <td>
                       {admin ? (
                         <form onSubmit={(e) => { e.preventDefault(); const t = new FormData(e.currentTarget).get("t") as string; run(() => api.put(`/api/v1/voice-packs/${pack.key}`, { texts: { [k]: t } })); }} className="inline-form">

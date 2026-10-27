@@ -26,6 +26,7 @@ from aicc_core.flow import (
     StartAI,
     StopTx,
 )
+from aicc_core.scenarios import SCENARIO_KEYS
 from aicc_core.voicepack import confirm_date_sequence
 
 from .ai import ExceptionAI
@@ -36,8 +37,8 @@ from .recorder import DualRecorder
 from .stt import STTAdapter
 
 log = logging.getLogger("aicc.agent")
-PRELOAD_KEYS = ("ack", "opening", "ask_working", "ask_end_date", "ask_available_date", "ask_repeat", "explain_role",
-                "callback", "refusal_ack", "closing", "ai_wait", "wrong_person")
+PRELOAD_KEYS = ("opening", "ack", "ask_working", "ask_end_date", "ask_available_date", "closing", "ask_repeat",
+                "callback", "refusal_ack", "ai_wait", "wrong_person", "explain_role", *SCENARIO_KEYS)
 NO_BARGE_IN = {"refusal_ack", "closing", "wrong_person", "callback", "ai_failed"}
 
 
@@ -155,7 +156,8 @@ class CallRunner:
         self._pending_utts: list = []
         pack = claim["voice_pack"]
         self.voice = VoiceBank(pack["manifest"], lambda k: self._fetch_clip(pack["id"], k), self.is_mock)
-        self.flow = CallFlow(date.fromisoformat(claim["reference_date"]))
+        clips = {k for k, c in (pack["manifest"].get("clips") or {}).items() if c.get("file")}
+        self.flow = CallFlow(date.fromisoformat(claim["reference_date"]), clips=clips)
         self.max_call_ms = int(claim.get("max_call_seconds") or 300) * 1000
         self.candidate_event: dict[int, str] = {}
         self.pending_vad_end: int | None = None
@@ -194,7 +196,7 @@ class CallRunner:
         self.flow.dialing()
         self._emit("call.dialing", 0, {"mock": self.is_mock})
         self.device.dial(phone)
-        self._preload_clips()
+        self._preload_queue = self._preload_list()
         t0 = self.device.now_ms()
         progressed = False  # 발신이 실제로 시작된 것(DIALING/ALERTING/OFFHOOK)을 한 번이라도 봤는지
         last_state = None
@@ -206,6 +208,7 @@ class CallRunner:
                 last_state = st.state
             if st.state not in ("IDLE", "ENDED"):
                 progressed = True
+                self._preload_next()  # 신호가 가는 동안 1개씩 미리 올림(응답 감지를 늦추지 않게)
             if st.state == "ACTIVE":
                 self.answered_ms = self.device.now_ms()
                 self._emit("call.answered", 0, {"detail": st.detail, "source": "device_state"})
@@ -242,21 +245,21 @@ class CallRunner:
             self._tick(self.cfg.poll_ms, record=False)
         self._converse()
 
-    def _preload_clips(self) -> None:
-        """신호가 가는 동안 고정 안내를 휴대폰에 미리 올려 둔다(재생 시작 지연 단축). 실패해도 통화는 계속."""
+    def _preload_list(self) -> list[str]:
         if self.is_mock or not hasattr(self.device, "tx_preload"):
+            return []
+        return [k for k in PRELOAD_KEYS if self.voice.has(k)]
+
+    def _preload_next(self) -> None:
+        """신호가 가는 동안 고정 안내를 휴대폰에 미리 올려 둔다(재생 시작 지연 단축). 실패해도 통화는 계속."""
+        if not getattr(self, "_preload_queue", None):
             return
-        n = 0
-        for key in PRELOAD_KEYS:
-            if not self.voice.has(key):
-                continue
-            try:
-                n += bool(self.device.tx_preload(key, self.voice.pcm(key)))
-            except DeviceError as e:
-                log.warning("[통화 %s] 안내 미리 올리기 실패(%s): %s", self.call_id[:8], key, e)
-                break
-        if n:
-            log.info("[통화 %s] 안내 %d개 미리 올림", self.call_id[:8], n)
+        key = self._preload_queue.pop(0)
+        try:
+            self.device.tx_preload(key, self.voice.pcm(key))
+        except DeviceError as e:
+            log.warning("[통화 %s] 안내 미리 올리기 실패(%s): %s", self.call_id[:8], key, e)
+            self._preload_queue = []
 
     def _wait_greeting(self) -> None:
         """받자마자 상대가 '여보세요'라고 하면 끝날 때까지 기다렸다가 안내를 시작한다(안내와 겹침 방지).

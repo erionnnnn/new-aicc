@@ -14,12 +14,16 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from .scenarios import SCENARIO_KEYS, SCENARIOS
+
 REQUIRED_KEYS = (
     "opening", "ask_working", "ask_end_date", "ask_available_date", "confirm_date", "ask_repeat",
     "explain_role", "callback", "refusal_ack", "closing", "ai_wait", "ai_failed", "wrong_person",
 )
-# 선택 음원: 없어도 실통화 가능. ack = 상대가 말을 마치면 인식 전에 바로 내는 짧은 맞장구("네,")
-OPTIONAL_KEYS = ("ack",)
+# 선택 음원: 없어도 실통화 가능.
+# - ack: 상대가 말을 마치면 인식 전에 바로 내는 짧은 맞장구("네,")
+# - sc_*: 기존 녹음 상황 응답(급여·병원 질문, 선호 조건, 운전 중 등 — scenarios.py)
+OPTIONAL_KEYS = ("ack",) + SCENARIO_KEYS
 DATE_PIECE_KEYS = tuple(f"month_{m}" for m in range(1, 13)) + tuple(f"day_{d}" for d in range(1, 32))
 PLACEHOLDER_MARKERS = ("[회사명]", "PLACEHOLDER", "TODO", "자리표시자", "[이름]")
 
@@ -40,6 +44,7 @@ DEFAULT_SCRIPTS = {
     "ai_failed": "죄송합니다. 지금은 답변드리기 어려워서 담당자가 다시 연락드리겠습니다.",
     "wrong_person": "잘못 연락드려 죄송합니다. 좋은 하루 보내세요.",
     "ack": "네,",
+    **{sc.key: sc.text for sc in SCENARIOS},
 }
 
 

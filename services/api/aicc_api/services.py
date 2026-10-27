@@ -684,7 +684,10 @@ def finish_call(db: Session, p: Principal, call: CallSession, *, outcome: str, o
             obs.range_start = d("range_start")
             obs.range_end = d("range_end")
             obs.raw_text = (observation.get("available_text") or observation.get("end_date_text") or "")[:500]
-            obs.history = observation.get("history") or []
+            obs.history = list(observation.get("history") or [])
+            notes = [str(n)[:30] for n in (observation.get("notes") or [])][:10]
+            if notes:  # 선호 조건 등 상황 메모(평일선호, 야간불가…) — 내보내기 검수메모에 표시
+                obs.history.append({"event": "NOTES", "notes": notes})
             if obs.work_status:
                 cg.work_status = obs.work_status
             if obs.end_date:
