@@ -17,8 +17,39 @@ if (-not $pyver) {
   exit 1
 }
 Write-Host "Python $pyver 사용"
-if (Test-Path .venv) { Remove-Item -Recurse -Force .venv }
-py -$pyver -m venv .venv
+# AICC 가 켜져 있으면 설치 파일이 잠겨 실패한다 → 먼저 닫도록 안내
+$venvDir = (Join-Path (Get-Location) ".venv")
+$running = Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($venvDir, [StringComparison]::OrdinalIgnoreCase) }
+if ($running) {
+  Write-Host ""
+  Write-Host "AICC(또는 그 Python)가 실행 중입니다: $(($running | Select-Object -ExpandProperty ProcessName -Unique) -join ', ')" -ForegroundColor Yellow
+  Write-Host "AICC 검은 창을 모두 닫은 뒤 setup.bat 을 다시 실행하세요."
+  exit 1
+}
+# 기존 가상환경은 정상이면 그대로 쓴다(매번 지우면 느리고, 파일이 잠겨 있으면 반쯤 지워진 채 망가짐)
+$venvOk = $false
+if (Test-Path .\.venv\Scripts\python.exe) {
+  $ErrorActionPreference = "Continue"
+  & .\.venv\Scripts\python -c "import sys, aicc_api, aicc_agent; assert '%d.%d' % sys.version_info[:2] == '$pyver'" *> $null
+  if ($LASTEXITCODE -eq 0) {
+    & .\.venv\Scripts\python -c "import importlib.util as u, sys; sys.exit(0 if u.find_spec('faster_whisper') is None else __import__('faster_whisper') and 0)" *> $null
+    if ($LASTEXITCODE -eq 0) { $venvOk = $true }
+  }
+  $ErrorActionPreference = "Stop"
+}
+if (-not $venvOk) {
+  if (Test-Path .venv) {
+    Write-Host "가상환경이 손상되어 새로 만듭니다"
+    try { Remove-Item -Recurse -Force .venv -ErrorAction Stop }
+    catch {
+      Write-Host "가상환경(.venv)을 지우지 못했습니다(파일 사용 중). AICC 창을 모두 닫고, 그래도 안 되면 PC 를 재시작한 뒤 다시 실행하세요." -ForegroundColor Yellow
+      exit 1
+    }
+  }
+  py -$pyver -m venv .venv
+} else {
+  Write-Host "기존 가상환경 사용(업데이트만 설치)"
+}
 .\.venv\Scripts\python -m pip install --upgrade pip | Out-Null
 .\.venv\Scripts\pip install -e ".[dev]"
 # 안내 음성 자동 생성용(선택). 실패해도 설치는 계속한다.
