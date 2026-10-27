@@ -94,9 +94,9 @@ GEMINI_VOICES = {"female": "Aoede", "male": "Charon"}  # 기존 프로그램 v11
 # 모델 이름은 자주 바뀐다(Gemini API 변경 기록 2026-10-27 확인: gemini-3.8-flash-tts GA 2026-09-22).
 # 처음 성공한 모델을 파일(.aicc/tts_model.txt)에 고정해, 이후 안내·AI 답 모두 같은 모델·같은 목소리로 만든다.
 GEMINI_TTS_MODELS = ("gemini-3.8-flash-tts", "gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts")
-# 모든 안내에 같은 말투 지시를 쓴다(지시가 다르면 같은 목소리라도 다르게 들림)
-STYLE = "차분하고 친절한 30대 한국어 여성 상담원이 전화로 또박또박 말하듯, 문장 그대로만 읽어 주세요: "
-STYLE_MALE = "차분하고 친절한 한국어 남성 상담원이 전화로 또박또박 말하듯, 문장 그대로만 읽어 주세요: "
+# 말투 지시문을 문장 앞에 붙이면 모델이 지시문까지 소리 내어 읽는 경우가 있어(2026-10-27 실통화 확인)
+# 안내 문장만 보낸다. 같은 모델·같은 목소리·음량 정규화로 통일한다.
+TTS_REV = "v2-plain"  # 만드는 방식이 바뀌면 올림 → '전체 목소리 통일'이 예전 방식 음원을 다시 만든다
 
 
 def _model_file():  # noqa: ANN202
@@ -124,7 +124,7 @@ def _pin(model: str) -> None:
 
 def voice_tag(pack_key: str) -> str:
     """음원 출처 표시(같은 표시 = 같은 모델·목소리·말투로 만든 음원)."""
-    return f"tts:gemini:{pinned_model() or '?'}:{GEMINI_VOICES.get(pack_key, 'Aoede')}"
+    return f"tts:gemini:{pinned_model() or '?'}:{GEMINI_VOICES.get(pack_key, 'Aoede')}:{TTS_REV}"
 
 
 def _pcm24_to_wav16k(data: bytes) -> bytes:
@@ -157,12 +157,11 @@ def synth_gemini(text: str, pack_key: str, api_key: str | None, model: str | Non
             prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice))))
     pinned = model or pinned_model()
     models = [pinned] if pinned else list(GEMINI_TTS_MODELS)  # 고정되면 그 모델만(목소리 통일)
-    style = STYLE_MALE if pack_key == "male" else STYLE
     last = ""
     for m in models:
         for attempt in range(6):
             try:
-                resp = client.models.generate_content(model=m, contents=style + text, config=cfg)
+                resp = client.models.generate_content(model=m, contents=text, config=cfg)
                 part = resp.candidates[0].content.parts[0]
                 data = part.inline_data.data
                 if isinstance(data, str):
