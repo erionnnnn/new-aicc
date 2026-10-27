@@ -274,8 +274,9 @@ def test_gcar_tx_push_and_app_process_command(tmp_path):
     tx.write(split_frames(tone(500), 0))
     tx.flush()
     gcar = f"/data/local/tmp/goodcare-uplink-{cid}.gcar"
-    assert adb.popens[-1] == ("shell", "-T", f"CLASSPATH=/data/local/tmp/goodcare-uplink-{cid}.jar", "app_process", "/",
-                              "com.goodcare.a24.Uplink", "--play-file", gcar, gcar + ".stop")
+    jar_dev = f"/data/local/tmp/goodcare-uplink-{cid}.jar"
+    assert adb.popens[-1] == ("shell", "-T", f"rm -f {gcar}.stop; chmod 600 {jar_dev} {gcar}; CLASSPATH={jar_dev} "
+                              f"app_process / com.goodcare.a24.Uplink --play-file {gcar} {gcar}.stop")
     assert any(c[0] == "push" and c[2] == gcar for c in adb.calls)
     assert not list((tmp_path / "w").glob("*.gcar"))  # PC 임시 파일 삭제
     tx.stop()

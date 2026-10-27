@@ -39,6 +39,10 @@ class MockSTT(STTAdapter):
         return SttResult(text, True, 1.0, 0, self.name)
 
 
+DEFAULT_PROMPT = ("간병 근무 일정 확인 전화입니다. 네. 아니요. 아니에요. 네, 통화 가능합니다. 지금은 근무 중이에요. "
+                  "근무 안 해요. 다음 주 월요일부터 가능해요. 11월 3일. 연락하지 마세요.")
+
+
 class FasterWhisperSTT(STTAdapter):  # pragma: no cover - 선택 의존성, 실기기 평가 필요
     name = "faster-whisper"
 
@@ -49,6 +53,8 @@ class FasterWhisperSTT(STTAdapter):  # pragma: no cover - 선택 의존성, 실�
         device = device or os.environ.get("AICC_WHISPER_DEVICE", "cpu")
         self.model = WhisperModel(model or os.environ.get("AICC_WHISPER_MODEL", "small"), device=device,
                                   compute_type=compute_type)  # 처음 실행 시 모델을 내려받는다(수백 MB)
+        # 짧은 '아니요'를 '안녕'으로 적는 오인식(2026-10-27 실통화)을 줄이려고 통화에서 나올 말을 미리 알려 준다
+        self.prompt = os.environ.get("AICC_STT_PROMPT", DEFAULT_PROMPT)
 
     def transcribe(self, frames: list[Frame]) -> SttResult:
         import numpy as np
@@ -57,7 +63,8 @@ class FasterWhisperSTT(STTAdapter):  # pragma: no cover - 선택 의존성, 실�
         audio = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
         t0 = time.monotonic()
         segs, info = self.model.transcribe(audio, language="ko", beam_size=1, vad_filter=False,
-                                           condition_on_previous_text=False)
+                                           condition_on_previous_text=False, without_timestamps=True,
+                                           initial_prompt=self.prompt)
         segs = list(segs)
         text = " ".join(s.text.strip() for s in segs).strip()
         conf = None

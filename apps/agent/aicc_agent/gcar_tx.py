@@ -18,6 +18,7 @@ from __future__ import annotations
 import os
 import struct
 import subprocess
+import time
 import uuid
 from pathlib import Path
 
@@ -53,6 +54,10 @@ class GcarFileTx:
         self._remote: list[str] = []
         self.played_ms = 0
         self.last_events: list[dict] = []
+        self._queue: list[bytes] = []
+        self._stopped = False
+        self._dur = 0.0
+        self._deadline = 0.0
 
     # ---- 경로 ----
     def _dev(self, suffix: str) -> str:
@@ -78,23 +83,52 @@ class GcarFileTx:
         return len(frames)
 
     def flush(self) -> None:
-        """모아 둔 안내 음성을 송출하고 재생이 끝날 때까지 기다린다."""
-        if self.call_id is None or not self._buf:
-            self._buf.clear()
-            return
+        """모아 둔 안내 음성을 송출하고 재생이 끝날 때까지 기다린다(동기 방식)."""
         pcm = bytes(self._buf)
         self._buf.clear()
-        for part in split_pcm(pcm):
-            self._play(part)
+        if self.call_id is None or not pcm:
+            return
+        self.play_async(pcm)
+        while not self.poll_playback(wait_s=0.05):
+            pass
 
-    def _play(self, pcm: bytes) -> None:
+    # ---- 비동기 재생: 재생 중에도 러너가 상대 음성을 계속 듣고 끼어들기를 처리할 수 있게 한다 ----
+    def play_async(self, pcm: bytes) -> None:
+        if self.call_id is None:
+            raise DeviceError("송출 모듈이 준비되지 않았습니다")
+        self._queue = split_pcm(pcm)
+        self._stopped = False
+        self._start_part(self._queue.pop(0))
+
+    def playing(self) -> bool:
+        return self._proc is not None or bool(getattr(self, "_queue", None))
+
+    def poll_playback(self, wait_s: float = 0.0) -> bool:
+        """재생이 모두 끝났으면 True. 모듈 오류는 DeviceError."""
+        if self._proc is None:
+            return True
+        try:
+            out, err = self._proc.communicate(timeout=wait_s or 0.001)
+        except subprocess.TimeoutExpired:
+            if time.monotonic() > self._deadline:
+                self.stop_playback()
+                raise DeviceError("송출 모듈이 제한 시간 안에 끝나지 않았습니다") from None
+            return False
+        rc = self._proc.returncode
+        self._proc = None
+        self._finish(out, err, rc)
+        if getattr(self, "_queue", None) and not self._stopped:
+            self._start_part(self._queue.pop(0))
+            return False
+        self._queue = []
+        return True
+
+    def _start_part(self, pcm: bytes) -> None:
         local = self.workdir / f"goodcare-uplink-{self.call_id}.gcar"
         local.write_bytes(gcar_bytes(pcm))
-        gcar, stop = self._dev(".gcar"), self._dev(".gcar.stop")
+        gcar, stop, jar = self._dev(".gcar"), self._dev(".gcar.stop"), self._dev(".jar")
         try:
-            self.adb.run("shell", f"rm -f {stop}", timeout=10)
             self.adb.run("push", str(local), gcar, timeout=30)
-            self.adb.run("shell", f"chmod 600 {self._dev('.jar')} {gcar}", timeout=10)
         finally:
             try:
                 local.unlink()
@@ -102,18 +136,14 @@ class GcarFileTx:
                 pass
         if gcar not in self._remote:
             self._remote += [gcar, stop]
-        cmd = ["shell", "-T", f"CLASSPATH={self._dev('.jar')}", "app_process", "/", MAIN_CLASS,
-               "--play-file", gcar, stop]
-        dur = len(pcm) / BYTES_PER_SEC
+        # 정리·권한·실행을 adb 한 번으로 묶어 송출 시작 지연을 줄인다(실행 명령 자체는 검증된 형식 그대로)
+        cmd = ["shell", "-T", f"rm -f {stop}; chmod 600 {jar} {gcar}; CLASSPATH={jar} app_process / {MAIN_CLASS} "
+               f"--play-file {gcar} {stop}"]
+        self._dur = len(pcm) / BYTES_PER_SEC
+        self._deadline = time.monotonic() + self._dur + self.extra_wait_s
         self._proc = self.adb.popen(*cmd)
-        try:
-            out, err = self._proc.communicate(timeout=dur + self.extra_wait_s)
-            rc = self._proc.returncode
-        except subprocess.TimeoutExpired:
-            self.stop_playback()
-            raise DeviceError("송출 모듈이 제한 시간 안에 끝나지 않았습니다") from None
-        finally:
-            self._proc = None
+
+    def _finish(self, out: bytes | None, err: bytes | None, rc: int | None) -> None:
         events = parse_events((out or b"") + b"\n" + (err or b""))
         self.last_events = events
         bad = next((e for e in events if e.get("kind") == "error"), None)
@@ -122,10 +152,12 @@ class GcarFileTx:
             raise DeviceError(f"송출 모듈 실행 실패(코드 {rc}): {msg}")
         if not any(e.get("kind") in ("written", "stopped") for e in events) and events:
             raise DeviceError("송출 모듈이 완료 신호(written)를 보내지 않았습니다")
-        self.played_ms += int(dur * 1000)
+        self.played_ms += int(self._dur * 1000)
 
     def stop_playback(self) -> None:
         """재생 중단 신호(.stop 파일)."""
+        self._queue = []
+        self._stopped = True
         if self.call_id is None:
             return
         try:
@@ -137,6 +169,7 @@ class GcarFileTx:
                 self._proc.wait(timeout=3)
             except subprocess.TimeoutExpired:
                 self._proc.kill()
+        self._proc = None
 
     def stop(self) -> None:
         """통화 종료: 재생 중단, 휴대폰 임시 파일 삭제."""

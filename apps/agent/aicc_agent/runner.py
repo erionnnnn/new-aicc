@@ -44,6 +44,9 @@ class RunnerConfig:
     silence_ms: int = 6000
     ring_timeout_ms: int = 40000
     poll_ms: int = 200
+    listen_ms: int = 40           # 재생 중 상대 음성 확인 간격
+    greeting_wait_ms: int = 1500  # 받자마자 '여보세요' 하는 동안 기다림
+    real_vad_end_ms: int = 600    # 실통화: '네 통화 / 가능합니다' 처럼 숨 쉬는 사이에 문장이 쪼개지지 않게
     tx_chunk_ms: int = 200
     vad_end_ms: int = 350
     vad_threshold: float = 300.0
@@ -107,7 +110,8 @@ class CallRunner:
         eid = event_id or new_event_id()
         if type_ in ("call.answered", "call.not_answered", "call.answer_unknown", "play", "utterance.final",
                      "ai.start", "ai.failed", "schedule.confirmed", "schedule.confirm_rejected", "silence.timeout",
-                     "call.remote_hangup", "call.ended", "tx.barge_in"):
+                     "call.remote_hangup", "call.ended", "tx.barge_in", "call.greeting",
+                     "call.dial_not_started"):
             p = dict(payload or {})
             if "text" in p:
                 p["text"] = str(p["text"])[:60]
@@ -137,7 +141,9 @@ class CallRunner:
         self._buf: list[dict] = []
         self.summary = CallSummary(self.call_id)
         self.recorder = DualRecorder()
-        self.vad = EnergyVAD(self.cfg.vad_threshold, self.cfg.vad_end_ms)
+        self.vad = EnergyVAD(self.cfg.vad_threshold,
+                             self.cfg.vad_end_ms if self.is_mock else self.cfg.real_vad_end_ms)
+        self._pending_utts: list = []
         pack = claim["voice_pack"]
         self.voice = VoiceBank(pack["manifest"], lambda k: self._fetch_clip(pack["id"], k), self.is_mock)
         self.flow = CallFlow(date.fromisoformat(claim["reference_date"]))
@@ -194,6 +200,8 @@ class CallRunner:
                 self.answered_ms = self.device.now_ms()
                 self._emit("call.answered", 0, {"detail": st.detail, "source": "device_state"})
                 self._flush()
+                if not self.is_mock:
+                    self._wait_greeting()
                 self._apply(self.flow.answered())
                 break
             if st.state in ("IDLE", "ENDED") and not progressed and not self.is_mock:
@@ -223,6 +231,26 @@ class CallRunner:
                 return
             self._tick(self.cfg.poll_ms, record=False)
         self._converse()
+
+    def _wait_greeting(self) -> None:
+        """받자마자 상대가 '여보세요'라고 하면 끝날 때까지 기다렸다가 안내를 시작한다(안내와 겹침 방지).
+
+        이 인사말은 질문에 대한 답이 아니므로 인식·판정에 쓰지 않는다(녹음에는 남는다).
+        """
+        t0 = self.device.now_ms()
+        vad = EnergyVAD(self.cfg.vad_threshold, 400)
+        spoke = False
+        while True:
+            for f in self._tick(self.cfg.listen_ms):
+                for ev in vad.feed(f):
+                    if ev.kind == "SPEECH_START":
+                        spoke = True
+                    elif ev.kind == "SPEECH_END":
+                        self._emit("call.greeting", 0, {"ms": self.device.now_ms() - t0})
+                        return
+            el = self.device.now_ms() - t0
+            if (not spoke and el >= self.cfg.greeting_wait_ms) or el >= 4000:
+                return
 
     def _tick(self, ms: int, record: bool = True) -> list[Frame]:
         frames = self.device.read_rx_frames(ms)
@@ -341,6 +369,9 @@ class CallRunner:
                                                          "boundary": "local_pipeline_not_remote"})
             self.pending_vad_end = None
         frames = split_frames(pcm, start)
+        if not self.is_mock and getattr(self.device, "tx_async", lambda: False)():
+            self._play_async(a, pcm, frames, start)
+            return
         step = max(1, self.cfg.tx_chunk_ms // 20)
         written = 0
         for i in range(0, len(frames), step):
@@ -359,6 +390,44 @@ class CallRunner:
         self._emit("tx.written", a.turn, {"frames": written, "remote_heard": "UNVERIFIED"})
         self.device.tx_segment_done(a.key)
         self.prompt_end_ms = self.device.now_ms()
+
+    def _play_async(self, a: Play, pcm: bytes, frames: list[Frame], start: int) -> None:
+        """파일 송출 방식: 재생을 시작해 두고, 끝날 때까지 상대 음성을 계속 듣는다.
+
+        재생 중 상대가 말하기 시작하면(끼어들기 허용 안내만) 즉시 재생을 멈추고, 그 발화는
+        지금 안내에 대한 답으로 처리한다. 예전처럼 재생이 끝난 뒤 몰아서 처리하면 답이 다음 질문에
+        붙는 문제가 있었다(2026-10-27 실통화 로그).
+        """
+        self.device.tx_play_async(pcm)
+        barge_ok = self.cfg.barge_in and a.key not in NO_BARGE_IN
+        stopped_at: int | None = None
+        while True:
+            done = self.device.tx_poll()
+            rx = self._tick(self.cfg.listen_ms)
+            if barge_ok:
+                for f in rx:
+                    evs = self.vad.feed(f)
+                    if f.pcm and f.speech:
+                        self.rx_speech_frames += 1
+                    for ev in evs:
+                        if ev.kind == "SPEECH_START" and stopped_at is None and not done:
+                            self.device.stop_tx()
+                            stopped_at = self.device.now_ms()
+                            self._emit("tx.barge_in", a.turn, {"after_ms": stopped_at - start})
+                        elif ev.kind == "SPEECH_END" and not self.flow.finished:
+                            self._pending_utts.append((ev.frames, ev.t_ms))
+            if done or stopped_at is not None:
+                break
+        end = stopped_at or self.device.now_ms()
+        played = [f for f in frames if f.t_ms < end]
+        self.recorder.add_tx(played)
+        self._emit("tx.written", a.turn, {"frames": len(played), "remote_heard": "UNVERIFIED"})
+        self.prompt_end_ms = self.device.now_ms()
+        # 재생 중 끝난 발화(짧은 대답)는 재생이 끝난 지금 처리한다
+        utts, self._pending_utts = self._pending_utts, []
+        for fr, t in utts:
+            if not self.flow.finished:
+                self._on_utterance(fr, t)
 
     def _ai(self, a: StartAI) -> None:
         self._emit("ai.start", a.turn, {"return_state": a.return_state})
