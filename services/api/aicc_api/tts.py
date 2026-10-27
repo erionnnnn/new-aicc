@@ -139,6 +139,22 @@ def _pcm24_to_wav16k(data: bytes) -> bytes:
     return _wav16k(resample_linear(pcm, rate, TARGET_RATE) if rate != TARGET_RATE else pcm)
 
 
+_calls: list[float] = []
+TTS_RPM = 8  # Gemini TTS 분당 한도 10회(AI Studio 사용량 화면, 2026-10-27) — 여유를 두고 8회
+
+
+def _pace() -> None:
+    """분당 요청 수를 TTS_RPM 이하로 맞춘다(한도에 걸려 1분씩 기다리는 것보다 빠름)."""
+    import time
+    now = time.monotonic()
+    while _calls and now - _calls[0] > 60:
+        _calls.pop(0)
+    if len(_calls) >= TTS_RPM:
+        time.sleep(60 - (now - _calls[0]) + 0.5)
+        _calls.pop(0)
+    _calls.append(time.monotonic())
+
+
 def synth_gemini(text: str, pack_key: str, api_key: str | None, model: str | None = None) -> bytes:  # pragma: no cover
     """Gemini 목소리(여성 Aoede / 남성 Charon)로 만든다. 모델이 고정된 뒤에는 다른 모델로 바꾸지 않는다."""
     if not api_key:
@@ -161,6 +177,7 @@ def synth_gemini(text: str, pack_key: str, api_key: str | None, model: str | Non
     for m in models:
         for attempt in range(6):
             try:
+                _pace()
                 resp = client.models.generate_content(model=m, contents=text, config=cfg)
                 part = resp.candidates[0].content.parts[0]
                 data = part.inline_data.data
@@ -180,14 +197,15 @@ def synth_gemini(text: str, pack_key: str, api_key: str | None, model: str | Non
                                    "키(보통 AIza 로 시작)를 다시 붙여 넣으세요. 브라우저가 로그인 비밀번호를 자동으로 채웠을 수 있습니다."
                                    ) from None
                 last = f"{m}: {type(e).__name__} {msg[:160]}"
-                if ("429" in msg or "RESOURCE_EXHAUSTED" in msg) and ("PerDay" in msg or "FreeTier" in msg
-                                                                      or "free_tier" in msg or attempt >= 2):
+                if ("429" in msg or "RESOURCE_EXHAUSTED" in msg) and ("PerDay" in msg or "per day" in msg.lower()):
                     # 하루 사용 한도(무료 등급) — 기다려도 안 풀리므로 바로 알린다. 만든 것까지는 저장돼 이어서 할 수 있다
-                    raise TTSError("Gemini 사용 한도를 넘었습니다(무료 등급의 하루 한도로 보입니다). Google AI Studio 에서 "
-                                   "결제(유료 등급)를 켜거나, 한도가 초기화된 뒤(보통 오후 4~5시 무렵) 같은 버튼을 다시 누르면 "
-                                   "이어서 만듭니다.") from None
-                if "429" in msg or "RESOURCE_EXHAUSTED" in msg or "503" in msg or "500" in msg:
-                    time.sleep(8 * (attempt + 1))  # 분당 요청 한도·일시 오류 — 같은 모델로 기다렸다 재시도
+                    raise TTSError("Gemini 하루 사용 한도를 넘었습니다. 한도가 초기화된 뒤(보통 오후 4~5시 무렵) 같은 버튼을 다시 "
+                                   "누르면 이어서 만듭니다.") from None
+                if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
+                    time.sleep(62)  # 분당 요청 한도(TTS 10회/분) — 1분 창이 지나면 같은 모델로 재시도
+                    continue
+                if "503" in msg or "500" in msg:
+                    time.sleep(5 * (attempt + 1))
                     continue
                 break  # 모델 없음 → (고정 전이면) 다음 모델
     raise TTSError(f"Gemini 음성 생성 실패 — {last}")
