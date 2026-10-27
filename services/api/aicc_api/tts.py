@@ -180,6 +180,12 @@ def synth_gemini(text: str, pack_key: str, api_key: str | None, model: str | Non
                                    "키(보통 AIza 로 시작)를 다시 붙여 넣으세요. 브라우저가 로그인 비밀번호를 자동으로 채웠을 수 있습니다."
                                    ) from None
                 last = f"{m}: {type(e).__name__} {msg[:160]}"
+                if ("429" in msg or "RESOURCE_EXHAUSTED" in msg) and ("PerDay" in msg or "FreeTier" in msg
+                                                                      or "free_tier" in msg or attempt >= 2):
+                    # 하루 사용 한도(무료 등급) — 기다려도 안 풀리므로 바로 알린다. 만든 것까지는 저장돼 이어서 할 수 있다
+                    raise TTSError("Gemini 사용 한도를 넘었습니다(무료 등급의 하루 한도로 보입니다). Google AI Studio 에서 "
+                                   "결제(유료 등급)를 켜거나, 한도가 초기화된 뒤(보통 오후 4~5시 무렵) 같은 버튼을 다시 누르면 "
+                                   "이어서 만듭니다.") from None
                 if "429" in msg or "RESOURCE_EXHAUSTED" in msg or "503" in msg or "500" in msg:
                     time.sleep(8 * (attempt + 1))  # 분당 요청 한도·일시 오류 — 같은 모델로 기다렸다 재시도
                     continue
