@@ -28,6 +28,7 @@ tts = ["edge-tts>=7.0", "miniaudio>=1.60"]
 aicc = "aicc_agent.launcher:main"
 aicc-probe = "aicc_agent.probe:main"
 aicc-simulate = "aicc_agent.simulate:main"
+aicc-account = "aicc_api.admin_cli:main"
 
 [build-system]
 requires = ["setuptools>=68"]

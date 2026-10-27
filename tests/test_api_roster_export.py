@@ -204,3 +204,15 @@ def test_clip_upload_converts_stereo_44k_wav(admin):
     data = admin.get("/api/v1/voice-packs/female/clips/closing").content
     with _w.open(io.BytesIO(data)) as w:
         assert (w.getnchannels(), w.getframerate()) == (1, 16000)
+
+
+def test_account_cli_list_and_reset(admin, monkeypatch, capsys):
+    from aicc_api import admin_cli
+    assert admin_cli.main(["list"]) == 0
+    assert "admin" in capsys.readouterr().out
+    pw = iter(["new-pass-12345", "new-pass-12345"])
+    monkeypatch.setattr(admin_cli.getpass, "getpass", lambda prompt="": next(pw))
+    assert admin_cli.main(["reset", "admin"]) == 0
+    r = admin.c.post("/api/v1/auth/login", json={"username": "admin", "password": "new-pass-12345"})
+    assert r.status_code == 200
+    assert admin_cli.main(["reset", "nobody"]) == 1
