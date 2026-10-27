@@ -71,22 +71,51 @@ def _segments(model, audio, vad: bool):  # noqa: ANN001, ANN202
     return [(float(s.start), float(s.end), s.text.strip()) for s in segs if s.text.strip()]
 
 
-def transcribe_file(model, path: Path) -> dict:  # noqa: ANN001
+def load_audio(path: Path):  # noqa: ANN201 - (채널 배열 목록, 16kHz float32)
+    """WAV 는 직접 읽고(채널 유지), 그 밖의 형식은 faster-whisper 디코더로 모노로 읽는다."""
+    import wave
+
+    import numpy as np
+    if path.suffix.lower() == ".wav":
+        try:
+            with wave.open(str(path)) as w:
+                ch, sw, rate, n = w.getnchannels(), w.getsampwidth(), w.getframerate(), w.getnframes()
+                raw = w.readframes(n)
+            if sw == 2:
+                a = np.frombuffer(raw, dtype="<i2").astype(np.float32) / 32768.0
+            elif sw == 1:
+                a = (np.frombuffer(raw, dtype=np.uint8).astype(np.float32) - 128) / 128.0
+            elif sw == 4:
+                a = np.frombuffer(raw, dtype="<i4").astype(np.float32) / 2147483648.0
+            else:
+                raise ValueError(f"지원하지 않는 WAV 비트({sw * 8})")
+            chans = [a[i::ch] for i in range(ch)] if ch > 1 else [a]
+            if rate != 16000:
+                out = []
+                for c in chans:
+                    m = int(len(c) * 16000 / rate)
+                    out.append(np.interp(np.linspace(0, len(c) - 1, m), np.arange(len(c)), c).astype(np.float32))
+                chans = out
+            return chans
+        except wave.Error:
+            pass  # 압축 WAV(GSM·ADPCM 등) → 디코더로
     from faster_whisper import decode_audio
-    stereo = decode_audio(str(path), sampling_rate=16000, split_stereo=True)
-    left, right = stereo if isinstance(stereo, tuple) else (stereo, None)
+    return [decode_audio(str(path), sampling_rate=16000)]
+
+
+def transcribe_file(model, path: Path) -> dict:  # noqa: ANN001
+    chans = load_audio(path)
     rows = []
-    if right is not None and _channels_differ(left, right):
+    if len(chans) >= 2 and _channels_differ(chans[0], chans[1]):
         mode = "좌우 채널 분리"
-        for spk, ch in (("채널1", left), ("채널2", right)):
+        for spk, ch in (("채널1", chans[0]), ("채널2", chans[1])):
             rows += [(s, e, spk, t) for s, e, t in _segments(model, ch, True)]
-        rows.sort()
-        dur = len(left) / 16000
+        rows.sort(key=lambda r: (r[0], r[2]))
     else:
-        mono = decode_audio(str(path), sampling_rate=16000)
+        mono = chans[0] if len(chans) == 1 else sum(chans) / len(chans)
         mode = "한 채널(화자 구분 없음)"
         rows = [(s, e, "", t) for s, e, t in _segments(model, mono, True)]
-        dur = len(mono) / 16000
+    dur = len(chans[0]) / 16000
     return {"mode": mode, "duration_s": round(dur, 1),
             "rows": [{"start": round(s, 1), "end": round(e, 1), "speaker": spk, "text": mask(t)} for s, e, spk, t in rows]}
 
@@ -174,7 +203,10 @@ def main(argv: list[str] | None = None) -> int:  # pragma: no cover - 실제 모
                 try:
                     r = transcribe_file(model, f)
                 except Exception as e:  # noqa: BLE001
-                    print(f"  [{i}/{len(files)}] 건너뜀(읽기 실패: {type(e).__name__})")
+                    print(f"  [{i}/{len(files)}] 건너뜀(읽기 실패: {type(e).__name__}: {str(e)[:150]})")
+                    if i == 1 or "--debug" in sys.argv:
+                        import traceback
+                        traceback.print_exc(limit=3)
                     continue
                 r["key"] = key
                 r["date"] = datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M")

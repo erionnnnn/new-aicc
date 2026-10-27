@@ -22,3 +22,21 @@ def test_write_xlsx(tmp_path):
     wb = load_workbook(out)
     assert wb.sheetnames == ["통화목록", "발화", "안내"]
     assert wb["발화"]["E2"].value == "여보세요"
+
+
+def test_load_wav_mono_and_stereo(tmp_path):
+    import struct
+    import wave
+
+    import pytest
+    pytest.importorskip("numpy")
+    from aicc_agent.transcribe import load_audio
+    for ch in (1, 2):
+        p = tmp_path / f"a{ch}.wav"
+        with wave.open(str(p), "wb") as w:
+            w.setnchannels(ch)
+            w.setsampwidth(2)
+            w.setframerate(8000)
+            w.writeframes(struct.pack(f"<{8000 * ch}h", *([1000] * 8000 * ch)))
+        chans = load_audio(p)
+        assert len(chans) == ch and abs(len(chans[0]) - 16000) <= 1
