@@ -332,7 +332,11 @@ def test_gcar_preload_skips_push_at_play_time(tmp_path):
     pushes = sum(1 for c in adb.calls if c[0] == "push")
     tx.play_async(pcm, "opening")
     assert sum(1 for c in adb.calls if c[0] == "push") == pushes  # 재생 때는 실행 명령만
-    assert f"goodcare-uplink-{tx.call_id}-opening.gcar" in adb.popens[-1][2]
+    import re as _re
+    for cmd in adb.popens:  # 모듈의 경로 검사 규칙(Uplink.java)과 같아야 실행된다
+        g = _re.search(r"--play-file (\S+) (\S+)$", cmd[2])
+        assert _re.fullmatch(r"/data/local/tmp/goodcare-uplink-[a-f0-9]{32}[.]gcar", g.group(1))
+        assert g.group(2) == g.group(1) + ".stop"
     while not tx.poll_playback(0.01):
         pass
     tx.play_async(pcm + b"\x00\x00", "opening")  # 내용이 다르면 새로 올림

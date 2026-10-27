@@ -100,8 +100,9 @@ class GcarFileTx:
         """30초 이하 고정 안내만 미리 올린다. 성공하면 True."""
         if self.call_id is None or not pcm or len(pcm) > MAX_SECONDS * BYTES_PER_SEC:
             return False
-        safe = "".join(ch for ch in key if ch.isalnum() or ch == "_")[:40]
-        gcar = self._dev(f"-{safe}.gcar")
+        # 송출 모듈은 경로가 정확히 /data/local/tmp/goodcare-uplink-<32hex>.gcar 여야만 실행한다
+        # (Uplink.java 'Invalid session file paths') → 미리 올리는 안내마다 별도 32자리 ID 를 쓴다
+        gcar = f"{DEVICE_DIR}/goodcare-uplink-{uuid.uuid4().hex}.gcar"
         self._push_gcar(pcm, gcar)
         self._preloaded[key] = (hashlib.sha256(pcm).hexdigest(), gcar, len(pcm))
         return True
