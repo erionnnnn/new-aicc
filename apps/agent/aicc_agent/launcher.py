@@ -80,9 +80,10 @@ def build_agent(env: dict[str, str], base: str):  # noqa: ANN201
 
     stt = make_stt(env.get("AICC_STT_ENGINE") or "faster-whisper")
     gm = (env.get("AICC_GEMINI_MODEL") or "").strip()
-    if env.get("GEMINI_API_KEY") and gm.removeprefix("models/").startswith("gemini"):
+    if env.get("GEMINI_API_KEY"):
         os.environ["GEMINI_API_KEY"] = env["GEMINI_API_KEY"]
-        os.environ["AICC_GEMINI_MODEL"] = env["AICC_GEMINI_MODEL"]
+        # 모델 칸이 비었거나 잘못돼도(예: 'gemini3.5flash') 알려진 Live 모델을 차례로 시도한다
+        os.environ["AICC_GEMINI_MODEL"] = gm if gm.removeprefix("models/").startswith("gemini-") else ""
         ai = make_ai("gemini-live")
     else:
         ai = FailingAI()  # 키가 없으면 예외 질문은 '상담 요청'으로 넘기고 날짜는 저장하지 않는다

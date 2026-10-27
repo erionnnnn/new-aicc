@@ -92,15 +92,25 @@ class FailingAI(ExceptionAI):
         return AIReply(False, None, None, int(timeout_s * 1000), "timeout")
 
 
-class GeminiLiveAI(ExceptionAI):  # pragma: no cover - 외부 API, 키·모델 확인 필요
+# Live(실시간 음성) 모델 이름은 자주 바뀐다. 설정값이 없거나 '없는 모델' 오류면 아래 순서로 시도한다.
+# 근거: Gemini API 변경 기록(2026-10-27 확인) — gemini-3.8-live(2026-09 GA), gemini-3.1-flash-live-preview(2026-03),
+#       gemini-2.5-flash-native-audio-preview-12-2025
+LIVE_MODELS = ("gemini-3.8-live", "gemini-3.1-flash-live-preview", "gemini-2.5-flash-native-audio-preview-12-2025")
+
+
+class GeminiLiveAI(ExceptionAI):  # pragma: no cover - 외부 API
     name = "gemini-live"
 
     def __init__(self, api_key: str | None = None, model: str | None = None):
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
-        self.model = model or os.environ.get("AICC_GEMINI_MODEL")
+        self.model = (model or os.environ.get("AICC_GEMINI_MODEL") or "").strip() or None
         self.voice = os.environ.get("AICC_GEMINI_VOICE", "Aoede")  # 러너가 음원팩(여성/남성)에 맞춰 바꿈
-        if not self.api_key or not self.model:
-            raise RuntimeError("GEMINI_API_KEY 와 AICC_GEMINI_MODEL(공식 문서에서 확인한 Live 모델명)이 필요합니다")
+        self._ok_model: str | None = None
+        if not self.api_key:
+            raise RuntimeError("GEMINI_API_KEY 가 필요합니다")
+
+    def _candidates(self) -> list[str]:
+        return list(dict.fromkeys(m for m in (self._ok_model, self.model, *LIVE_MODELS) if m))
 
     def respond(self, question: str, *, timeout_s: float = 10.0, context: str | None = None) -> AIReply:
         import asyncio
@@ -108,20 +118,23 @@ class GeminiLiveAI(ExceptionAI):  # pragma: no cover - 외부 API, 키·모델 �
         from google import genai  # 지연 import
         from google.genai import types
 
-        async def run() -> tuple[str, bytes]:
+        prompt = context or question
+
+        async def run(model: str) -> tuple[str, bytes]:
             client = genai.Client(api_key=self.api_key)
             # 기존 녹음과 같은 목소리(여성 Aoede / 남성 Charon)
             voice = types.SpeechConfig(voice_config=types.VoiceConfig(
                 prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=self.voice)))
-            cfg = types.LiveConnectConfig(response_modalities=["AUDIO"],
-                                          system_instruction=SYSTEM_PROMPT,
-                                          speech_config=voice,
-                                          output_audio_transcription={})
+            cfg = types.LiveConnectConfig(response_modalities=["AUDIO"], system_instruction=SYSTEM_PROMPT,
+                                          speech_config=voice, output_audio_transcription={})
             pcm = bytearray()
             text = []
-            async with client.aio.live.connect(model=self.model, config=cfg) as session:
-                await session.send_client_content(turns={"role": "user", "parts": [{"text": context or question}]},
-                                                  turn_complete=True)
+            async with client.aio.live.connect(model=model, config=cfg) as session:
+                try:
+                    await session.send_client_content(turns={"role": "user", "parts": [{"text": prompt}]},
+                                                      turn_complete=True)
+                except Exception:  # noqa: BLE001 - 일부 최신 Live 모델은 실시간 입력으로만 글을 받는다
+                    await session.send_realtime_input(text=prompt)
                 async for msg in session.receive():
                     sc = getattr(msg, "server_content", None)
                     if sc and sc.model_turn:
@@ -135,16 +148,28 @@ class GeminiLiveAI(ExceptionAI):  # pragma: no cover - 외부 API, 키·모델 �
             return "".join(text), bytes(pcm)
 
         t0 = time.monotonic()
-        try:
-            text, pcm = asyncio.run(asyncio.wait_for(run(), timeout=timeout_s))
-        except Exception as e:  # noqa: BLE001
-            # 원인을 로그에서 바로 알 수 있게 오류 내용을 함께 남긴다(키 오류·모델 이름 오류 등)
-            return AIReply(False, None, None, int((time.monotonic() - t0) * 1000),
-                           f"{type(e).__name__}: {str(e)[:200]}")
-        # Live API 출력은 24kHz PCM(공식 문서 기준, 배포 시 재확인) → 16kHz 로 변환
-        from .audio import resample_linear
-        return AIReply(True, limit_sentences(text) or None, resample_linear(pcm, 24000, 16000) if pcm else None,
-                       int((time.monotonic() - t0) * 1000))
+        errors = []
+        for model in self._candidates():
+            left = timeout_s - (time.monotonic() - t0)
+            if left <= 1:
+                break
+            try:
+                text, pcm = asyncio.run(asyncio.wait_for(run(model), timeout=left))
+            except Exception as e:  # noqa: BLE001
+                msg = str(e)
+                errors.append(f"{model}: {type(e).__name__}: {msg[:160]}")
+                if "not found" in msg or "not supported" in msg or "1008" in msg:
+                    continue  # 모델 이름 문제 → 다음 모델
+                break  # 키·네트워크·시간 초과 등은 다른 모델로도 같으므로 중단
+            if not pcm:
+                errors.append(f"{model}: 음성 없음")
+                continue
+            self._ok_model = model
+            # Live API 출력은 24kHz PCM → 16kHz 로 변환
+            from .audio import resample_linear
+            return AIReply(True, limit_sentences(text) or None, resample_linear(pcm, 24000, 16000),
+                           int((time.monotonic() - t0) * 1000))
+        return AIReply(False, None, None, int((time.monotonic() - t0) * 1000), " | ".join(errors)[:400] or "timeout")
 
 
 def make_ai(kind: str) -> ExceptionAI:

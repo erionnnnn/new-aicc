@@ -390,8 +390,8 @@ function PilotPanel({ me }: { me: Me }) {
               ) : <input name="tx" defaultValue={a.tx_device} placeholder="장치 목록을 읽지 못했습니다" />}
             </Field>
             <div />
-            <Field label="Gemini Live 모델명(예외 질문용, 선택)" hint="gemini 로 시작하는 모델명만 저장됩니다(브라우저 자동완성 주의)">
-              <input name="gmodel" defaultValue={a.gemini_model} placeholder="gemini-..." autoComplete="off" data-lpignore="true" data-1p-ignore />
+            <Field label="Gemini Live 모델명(대화용, 선택)" hint="비워 두는 것을 권장 — 알려진 Live 모델을 자동으로 찾아 씁니다">
+              <input name="gmodel" defaultValue={a.gemini_model} placeholder="비워 두면 자동 선택(gemini-3.8-live 등)" autoComplete="off" data-lpignore="true" data-1p-ignore />
             </Field>
             <Field label={`Gemini API 키${a.has_gemini_key ? " (저장됨 — 바꿀 때만 입력)" : ""}`}>
               <input name="gkey" type="text" autoComplete="off" spellCheck={false} data-lpignore="true" data-1p-ignore
