@@ -75,7 +75,11 @@ def _role_after(text: str, end: int) -> str | None:
     tail = text[end:end + 12]
     if re.match(r"\s*(?:쯤|정도|경)?\s*까지", tail):
         return "END"
-    if re.match(r"\s*(?:쯤|정도|경)?\s*(?:부터|이후|후로|되|돼|가능|괜찮|할\s*수|하면|나갈|들어갈|일할|근무\s*가능)", tail):
+    # '11월 8일에 끝나요', '금요일 퇴실해요' — 끝나는 날(2026-10-27 시나리오 반영)
+    if re.match(r"\s*(?:쯤|정도|경)?\s*(?:에|이면|면)?\s*(?:끝나|끝날|종료|퇴실|마치|마무리)", tail):
+        return "END"
+    if re.match(r"\s*(?:쯤|정도|경)?\s*(?:부터|이후|후로|되|돼|가능|괜찮|할\s*수|하면|나갈|들어갈|일할|근무\s*가능|"
+                r"(?:에|이면|면)?\s*(?:시작|됩니다|돼요))", tail):
         return "START"
     return None
 
@@ -127,6 +131,9 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("REL_DAYS", re.compile(r"(\d{1,2})일\s*(?:후|뒤)")),
     ("DAY", re.compile(r"(?<![\d월])(\d{1,2})일(?!\s*(?:후|뒤|간|동안|요일))")),
     ("TODAY", re.compile(r"오늘")),
+    # '바로 근무 가능해요', '지금부터 바로 일할 수 있어요' → 오늘부터(재확인 질문으로 명시 동의를 받는다)
+    ("NOW", re.compile(r"(?:지금\s*부터|지금\s*바로|당장|즉시|바로)(?=\s*(?:근무|일|간병|시작|가능|할\s*수|돼|됩))"
+                        r"(?!.{0,10}(?:어려|못|안\s*돼|안돼|힘들|불가))")),
     ("TOMORROW", re.compile(r"내일")),
     ("DAY_AFTER", re.compile(r"모레|모래")),
     ("DAY_AFTER2", re.compile(r"글피")),
@@ -218,6 +225,8 @@ def _build(name: str, m: re.Match[str], norm: str, ref: date) -> DateMention | N
         return DateMention("DATE", d, role=role, span=(s, e), source=src)
     if name == "TODAY":
         return DateMention("DATE", ref, role=role, span=(s, e), source=src)
+    if name == "NOW":
+        return DateMention("DATE", ref, role="START", span=(s, e), source=src)
     if name == "TOMORROW":
         return DateMention("DATE", ref + timedelta(days=1), role=role, span=(s, e), source=src)
     if name == "DAY_AFTER":

@@ -77,7 +77,14 @@ export const CLIP_LABEL: Record<string, string> = {
   sc_emotional_hard: "공감", sc_didnt_hear: "다시 설명", sc_silence_check: "침묵 확인", sc_silence_end: "침묵 종료",
   sc_no_severe: "환자조건 선호", sc_no_night: "야간 불가", sc_weekday_only: "평일만", sc_weekend_only: "주말만",
   sc_preferred_hospital: "선호 병원", sc_high_pay_only: "급여 선호", sc_text_request: "문자 요청", sc_rest: "당분간 휴식",
-  sc_unknown_schedule: "일정 미정", sc_driving: "운전 중", sc_work_issue: "현장 용건(입금·보호자 등) 담당자 연결", sc_end_unknown: "종료일 모름 → 끝나면 연락 요청", sc_available_now: "즉시 가능(미사용)",
+  sc_unknown_schedule: "일정 미정", sc_driving: "운전 중", sc_work_issue: "현장 용건 담당자 연결", sc_custom_delete_review: "연락처 삭제 요청",
+  sc_custom_pay_review: "정산 확인 요청", sc_custom_contract_review: "계약·기간 확인 요청", sc_custom_replacement_review: "교체 요청",
+  sc_custom_arrival_review: "입실 확인 요청", sc_custom_care_review: "현장 조율 요청", sc_custom_difficulty_review: "현장 어려움",
+  sc_custom_contact_review: "담당자 연결 요청", sc_custom_health: "건강 사유", sc_custom_manager: "담당 실장 안내",
+  sc_custom_night_only: "야간 선호", sc_custom_location: "지역·거리 선호", sc_custom_duration: "기간 선호",
+  sc_custom_recovery: "잠깐 휴식", sc_custom_personal: "개인 사정", sc_custom_number_source: "연락처 출처 문의",
+  sc_custom_intro: "누구세요 답변(김태희 실장)", sc_work_end_date: "종료일 확인 후 가능일 질문", sc_custom_reask_date: "가능일 다시 질문",
+  sc_custom_staff_close: "요청 남기고 마무리", sc_custom_end_with_unknown: "종료 예정·다음 일정 미정 기록", sc_end_unknown: "종료일 모름 → 끝나면 연락 요청", sc_available_now: "즉시 가능(미사용)",
 };
 
 export function koDate(iso: string): string {

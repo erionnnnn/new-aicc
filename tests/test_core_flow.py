@@ -36,7 +36,8 @@ def test_happy_path_not_working():
     c = d.confirms()
     assert len(c) == 1 and c[0].available_date == date(2026, 10, 26) and c[0].evidence_event_id == "e4"
     assert d.f.outcome == "CONFIRMED"
-    assert d.plays() == ["opening", "ask_working", "ask_available_date", "confirm_date", "closing"]
+    # 사용자 시나리오(2026-10-27): 첫 '네' 뒤 바로 가능일 질문, '쉬고 있어요'에는 같은 질문을 한 번 더
+    assert d.plays() == ["opening", "ask_available_date", "ask_available_date", "confirm_date", "closing"]
 
 
 def test_t09_ars_branching_continues_after_first_answer():
@@ -51,7 +52,6 @@ def test_t09_ars_branching_continues_after_first_answer():
 
 def test_end_date_does_not_imply_start():
     d = Driver()
-    d.say("네")
     d.say("네")
     d.say("25일까지 일해요")
     assert d.f.state == "ASK_AVAILABLE_DATE"
@@ -102,12 +102,12 @@ def test_ai_exception_returns_to_question_once():
     d.say("근데 누구세요?")
     assert d.f.state == "AI_EXCEPTION"
     ai = [a for a in d.actions if isinstance(a, StartAI)][0]
-    assert ai.return_state == "ASK_WORKING"
+    assert ai.return_state == "ASK_AVAILABLE_DATE"
     # AI 진행 중 일반 발화는 상태기계가 날짜로 쓰지 않음
     d.say("26일부터 가능해요")
     assert d.f.obs.available_date is None
-    assert d.f.ai_done(turn=ai.turn)[0] == Play("ask_working", d.f.turn, {})
-    assert d.f.state == "ASK_WORKING"
+    assert d.f.ai_done(turn=ai.turn)[0] == Play("ask_available_date", d.f.turn, {})
+    assert d.f.state == "ASK_AVAILABLE_DATE"
     # 오래된 턴의 AI 완료는 무시
     assert d.f.ai_done(turn=ai.turn) == []
 

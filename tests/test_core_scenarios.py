@@ -34,9 +34,9 @@ def test_pay_question_plays_recording_then_waits_for_schedule():
 
 def test_after_info_simple_yes_continues_with_working_question():
     d = D()
-    assert d.say("누구세요?") == ["sc_who_are_you"]
-    assert d.say("네") == ["ask_working"]
-    assert d.f.state == "ASK_WORKING"
+    assert d.say("누구세요?") == ["sc_custom_intro"]
+    assert d.say("네") == ["ask_available_date"]
+    assert d.f.state == "ASK_AVAILABLE_DATE"
 
 
 def test_after_info_working_answer_goes_to_end_date():
@@ -155,7 +155,7 @@ def test_conversation_mode_ai_failure_returns_to_question_not_hangup():
     f.utterance("네", turn=f.turn, event_id="e1")
     f.utterance("음 그게", turn=f.turn, event_id="e2")
     acts = f.ai_failed(turn=f.turn)
-    assert [a.key for a in acts if isinstance(a, Play)] == ["ask_working"] and not f.finished
+    assert [a.key for a in acts if isinstance(a, Play)] == ["ask_available_date"] and not f.finished
 
 
 def test_conversation_mode_opening_no_is_not_hangup():
@@ -174,8 +174,8 @@ def test_wrong_person_variants():
 def test_work_issue_promises_followup_marks_review_and_continues():
     d = D()
     d.say("네")
-    assert d.say("근데 저번 입금이 아직 안 됐어요") == ["sc_work_issue"]
-    assert "WORK_ISSUE" in d.f.review_reasons and d.f.state == "WAIT_AVAILABILITY" and not d.f.finished
+    assert d.say("근데 저번 입금이 아직 안 됐어요") == ["sc_custom_pay_review"]
+    assert "PAY_REVIEW" in d.f.review_reasons and d.f.state == "WAIT_AVAILABILITY" and not d.f.finished
     assert d.say("다음 주 월요일부터요") == ["confirm_date"]
 
 

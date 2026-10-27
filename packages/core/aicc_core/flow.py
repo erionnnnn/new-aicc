@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -20,6 +21,8 @@ from .dates import DateMention
 from .intents import Interpretation, interpret
 from .scenarios import BY_CODE, Scenario
 from .scenarios import match as match_scenario
+
+_QUESTION_END = re.compile(r"(?:\?|나요|까요|ㄴ가요|인가요|있어요\?|예요\?|에요\?)$")
 
 # WAIT_AVAILABILITY: 녹음 상황 응답(급여·병원 질문 등)을 들려준 뒤 일정 답을 기다리는 상태(질문을 다시 하지 않음)
 DIALOGUE_STATES = ("OPENING", "ASK_WORKING", "ASK_END_DATE", "ASK_AVAILABLE_DATE", "CONFIRM_DATE", "WAIT_AVAILABILITY")
@@ -141,6 +144,7 @@ class CallFlow:
         self.clips = frozenset(clips or ())
         self.max_scenarios = max_scenarios
         self.scenario_count = 0
+        self.after_review = False
         # 대화형 AI: 규칙으로 못 알아들은 말을 '다시 말씀해 주세요' 대신 AI(같은 목소리)가 자연스럽게 받아 주고
         # 원래 확인하려던 질문으로 이끈다. 날짜 확정은 여전히 이 상태기계만 한다(AI 는 말만 함).
         self.ai_conversation = ai_conversation
@@ -177,6 +181,13 @@ class CallFlow:
         it = interpret(text, state_for_parse or "OPENING", self.reference)
 
         # 1) 전역 최우선
+        dele = BY_CODE["CUSTOM_DELETE_REVIEW"]
+        if self._has(dele.key) and match_scenario(text, ("DELETE",)) is dele:
+            # 연락처 삭제 요청 = 연락거부(즉시 차단) + 삭제는 담당자 확인
+            self.obs.history.append({"event": "REFUSAL", "event_id": event_id, "delete_request": True})
+            self.review_reasons.append(dele.review)
+            return [StopTx("delete_request"), BlockContact("CALLEE_REQUEST", event_id), self._play(dele.key),
+                    MarkReview(dele.review), HangUp("delete_request"), *self._end("REFUSED")]
         if it.intent == "REFUSAL":
             self.obs.history.append({"event": "REFUSAL", "event_id": event_id})
             return [StopTx("refusal"), BlockContact("CALLEE_REQUEST", event_id), self._play("refusal_ack"),
@@ -204,7 +215,7 @@ class CallFlow:
         if it.intent == "REPEAT":
             didnt = BY_CODE["DIDNT_HEAR"].key
             n = self.reprompts.get(self.state, 0)
-            if self.state == "OPENING" and self._has(didnt) and n < self.max_reprompt:
+            if self.state != "CONFIRM_DATE" and self._has(didnt) and n < self.max_reprompt:
                 self.reprompts[self.state] = n + 1
                 self.state = "WAIT_AVAILABILITY"
                 return [self._play(didnt)]
@@ -280,7 +291,7 @@ class CallFlow:
             end = self._pick(it, "END")
             if end:
                 self._set_end(end)
-                return self._go("ASK_AVAILABLE_DATE")
+                return self._after_end(it, eid)
             return self._go("ASK_END_DATE")
         if it.intent == "NOT_WORKING":
             self.obs.work_status = "NOT_WORKING"
@@ -288,7 +299,8 @@ class CallFlow:
         if it.intent == "DATE":
             return self._from_available(it, eid)
         if it.intent == "YES":
-            return self._go("ASK_WORKING")
+            # 사용자 시나리오(2026-10-27): 첫 인사 뒤 단순 수락은 근무 여부를 따로 묻지 않고 바로 가능일을 묻는다
+            return self._go("ASK_AVAILABLE_DATE")
         if it.intent == "NO":
             if self.ai_conversation:
                 return self._reprompt(it)  # '아닌데요'만으로는 뜻이 모호 → AI 가 되물음
@@ -303,7 +315,7 @@ class CallFlow:
                 self._set_end(end)
                 if self._pick(it, "START"):
                     return self._from_available(it, eid)
-                return self._go("ASK_AVAILABLE_DATE")
+                return self._after_end(it, eid)
             return self._go("ASK_END_DATE")
         if it.intent == "NOT_WORKING":
             self.obs.work_status = "NOT_WORKING"
@@ -324,7 +336,7 @@ class CallFlow:
                 self._set_end(end)
             if self._pick(it, "START"):
                 return self._from_available(it, eid)
-            return self._go("ASK_AVAILABLE_DATE")
+            return self._after_end(it, eid)
         if it.intent == "UNKNOWN_DATE":
             done = self._end_unknown(it)
             if done is not None:
@@ -341,6 +353,16 @@ class CallFlow:
         return self._reprompt(it)
 
     def _on_ask_available_date(self, it: Interpretation, eid: str) -> list[Action]:
+        if it.intent == "WORKING":
+            self.obs.work_status = "WORKING"
+            end = self._pick(it, "END")
+            if end:
+                self._set_end(end)
+                return self._after_end(it, eid)
+            return self._go("ASK_END_DATE")
+        if it.intent == "NOT_WORKING" and not self._pick(it, "START"):
+            self.obs.work_status = "NOT_WORKING"
+            return self._reprompt(it, same_question=True)
         if it.intent == "DATE":
             start = self._pick(it, "START") or self._pick(it, None)
             if start is None:
@@ -400,6 +422,10 @@ class CallFlow:
                                      "event_id": eid})
             self.obs.available_date = None
             self.obs.candidate_event_id = None
+            reask = BY_CODE["CUSTOM_REASK_DATE"].key
+            if self._has(reask):
+                self.state = "ASK_AVAILABLE_DATE"
+                return [self._play(reask)]  # "그럼 언제부터 근무 가능하신지 다시 말씀해 주시겠어요?"
             return self._go("ASK_AVAILABLE_DATE")
         return self._reprompt(it, same_question=True)
 
@@ -418,7 +444,11 @@ class CallFlow:
             self.state = "ASK_AVAILABLE_DATE"
             return self._on_ask_available_date(it, eid)
         if it.intent in ("YES", "NO"):
-            return [self._question()]  # "네" → 이어서 근무 여부(또는 가능일) 질문
+            close = BY_CODE["CUSTOM_STAFF_CLOSE"].key
+            if self.after_review and self._has(close):
+                # 담당자 확인 요청 뒤 "네, 확인 부탁드려요" → 요청을 남기고 마무리
+                return [self._play(close), HangUp("staff_close"), *self._end("CONSULT_REQUESTED")]
+            return [self._question()]  # "네" → 이어서 가능일 질문
         return self._reprompt(it)
 
     def _has(self, key: str) -> bool:
@@ -429,7 +459,14 @@ class CallFlow:
         s: Scenario | None = match_scenario(text)
         if s is None:
             return None
-        dated = any(m.kind in ("DATE", "ANYTIME", "RANGE") for m in it.dates)
+        # '월요일부터 금요일만'처럼 요일 이름만 있는 평일·주말 선호는 날짜 답이 아니다
+        bare_weekday = s.code in ("WEEKDAY_ONLY", "WEEKEND_ONLY")
+        dated = any(m.kind in ("DATE", "ANYTIME", "RANGE")
+                    and not (bare_weekday and re.fullmatch(r"[월화수목금토일]요일", m.source.strip()))
+                    for m in it.dates)
+        # 질문(예: '오늘 가능한 일자리가 있나요?')은 날짜가 들어 있어도 질문 답을 먼저 한다
+        if s.kind == "INFO" and _QUESTION_END.search(text.strip()):
+            dated = False
         if s.note and s.note not in self.obs.notes and s.kind == "PREF":
             self.obs.notes.append(s.note)  # 선호 조건은 녹음 재생 여부와 관계없이 기록
         if not self._has(s.key) or self.scenario_count >= self.max_scenarios:
@@ -441,6 +478,8 @@ class CallFlow:
         if dated:
             return None
         if s.kind == "END":
+            if s.code == "UNKNOWN_SCHEDULE" and self.state == "ASK_END_DATE" and self._has(BY_CODE["END_UNKNOWN"].key):
+                return None  # 근무 중 종료일 모름은 '끝나시면 연락 부탁'(END_UNKNOWN)으로
             self.obs.history.append({"event": "SCENARIO", "code": s.code, "event_id": eid})
             if s.note and s.note not in self.obs.notes:
                 self.obs.notes.append(s.note)
@@ -452,7 +491,9 @@ class CallFlow:
                 self.obs.confirmation_state = "UNKNOWN"
                 self.obs.available_text = text
             return [*out, HangUp(s.code.lower()), *self._end(s.outcome or "UNCONFIRMED")]
-        if s.kind == "INFO":
+        if s.kind in ("INFO", "REVIEW"):
+            if s.kind == "REVIEW":
+                self.after_review = True
             return self._scenario_play(s, eid)
         return None
 
@@ -470,6 +511,21 @@ class CallFlow:
             return [*extra, play, self._question()]  # 답한 뒤 날짜 재확인을 다시
         self.state = "WAIT_AVAILABILITY"
         return [*extra, play]
+
+    def _after_end(self, it: Interpretation, eid: str) -> list[Action]:
+        """종료일을 들은 뒤: 다음 일정을 모른다고 했으면 기록 후 마무리, 아니면 '그다음엔 언제부터?'"""
+        if any(m.kind == "UNKNOWN" for m in it.dates):
+            s = BY_CODE["CUSTOM_END_WITH_UNKNOWN"]
+            if self._has(s.key):
+                self.obs.history.append({"event": "NEXT_DATE_UNKNOWN", "text": it.text})
+                self.obs.notes.append(s.note)
+                self.review_reasons.append(s.review)
+                return [self._play(s.key), MarkReview(s.review), HangUp("next_unknown"), *self._end(s.outcome)]
+        nxt = BY_CODE["WORK_END_DATE"].key
+        if self._has(nxt):
+            self.state = "ASK_AVAILABLE_DATE"
+            return [self._play(nxt)]  # "네, 확인했습니다. 그다음에는 언제부터 근무 가능하실까요?"
+        return self._go("ASK_AVAILABLE_DATE")
 
     def _end_unknown(self, it: Interpretation) -> list[Action] | None:
         """근무 중인데 끝나는 날을 모름 → '끝나시면 연락 부탁드려요'로 마무리(녹음이 있을 때만)."""
@@ -572,7 +628,7 @@ class CallFlow:
         if self.state == "OPENING":
             return self._play("ask_repeat")
         if self.state == "WAIT_AVAILABILITY":
-            self.state = "ASK_WORKING" if self.obs.work_status is None else "ASK_AVAILABLE_DATE"
+            self.state = "ASK_AVAILABLE_DATE"
         return self._play(QUESTION_KEY[self.state])
 
     def _play(self, key: str, params: dict | None = None) -> Play:

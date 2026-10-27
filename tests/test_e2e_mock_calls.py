@@ -185,7 +185,7 @@ def test_ai_exception_then_ars_resumes(admin):
     assert types.count("ai.start") == 1 and "ai.done" in types
     plays = [e["payload"]["key"] for e in detail["events"] if e["type"] == "play"]
     assert plays.count("opening") == 1  # 오프닝 1회(R04)
-    assert plays[:3] == ["opening", "ask_working", "ask_working"]  # AI 응답 후 원래 질문 복귀
+    assert plays[:3] == ["opening", "ask_available_date", "ask_available_date"]  # AI 응답 후 원래 질문 복귀
 
 
 def test_t17_confirmation_idempotent_and_requires_consent(admin):

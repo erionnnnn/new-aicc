@@ -45,6 +45,7 @@ aicc_api = ["migrations/*.py", "migrations/versions/*.py", "alembic.ini", "stati
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+pythonpath = ["tests"]
 
 [tool.ruff]
 line-length = 110

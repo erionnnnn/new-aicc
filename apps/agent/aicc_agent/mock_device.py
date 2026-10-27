@@ -161,5 +161,5 @@ class MockDevice(DeviceAdapter):
         return n
 
     def tx_segment_done(self, label: str) -> None:
-        if label in QUESTION_LABELS and self._state == "ACTIVE":
+        if (label in QUESTION_LABELS or label.startswith("sc_")) and self._state == "ACTIVE":
             self._queue_reply()

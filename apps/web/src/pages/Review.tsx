@@ -5,7 +5,10 @@ import { DateCell, Empty, ErrorBox, Field, Notice, OutcomeBadge, Page, useAsync 
 
 const REASON: Record<string, string> = {
   AI_FAILED: "AI 응답 실패", AI_LIMIT: "예외 질문 횟수 초과", NO_RESPONSE: "무응답", WRONG_PERSON: "잘못된 상대",
-  DATE_RANGE_ONLY: "날짜 범위만 응답", DATE_UNKNOWN: "날짜 모름", TEXT_REQUESTED: "문자 안내 요청", WORK_ISSUE: "현장 용건(입금·보호자 등) 담당자 확인", END_DATE_UNKNOWN: "근무 종료일 모름(재연락)", RESTING: "당분간 휴식", MAX_CALL_DURATION: "최대 통화 시간 초과",
+  DATE_RANGE_ONLY: "날짜 범위만 응답", DATE_UNKNOWN: "날짜 모름", TEXT_REQUESTED: "문자 안내 요청", WORK_ISSUE: "현장 용건 담당자 확인", DELETE_REQUEST: "연락처 삭제 요청", PAY_REVIEW: "정산 확인 요청",
+  CONTRACT_REVIEW: "계약·기간 확인 요청", REPLACEMENT_REVIEW: "교체 요청", ARRIVAL_REVIEW: "입실 확인 요청", CARE_REVIEW: "현장 조율 요청",
+  DIFFICULTY_REVIEW: "현장 어려움", CONTACT_REVIEW: "담당자 연결 요청", HEALTH: "건강 사유", NUMBER_SOURCE: "연락처 출처 문의",
+  NEXT_DATE_UNKNOWN: "다음 일정 미정", END_DATE_UNKNOWN: "근무 종료일 모름(재연락)", RESTING: "당분간 휴식", MAX_CALL_DURATION: "최대 통화 시간 초과",
   ANSWER_DETECTION_UNKNOWN: "응답 감지 불가", HANGUP_FAILED_MANUAL: "종료 명령 실패(단말에서 직접 확인)",
   TOO_MANY_CORRECTIONS: "날짜 정정 반복", SERVER_ERROR: "서버 오류",
 };
