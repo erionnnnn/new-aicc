@@ -124,3 +124,14 @@ def test_keywords_do_not_steal_not_working_answer():
     assert match("지금은 쉬어요") is None
     assert match("중증 환자는 싫어요").code == "NO_SEVERE"
     assert match("무슨 일감이에요").code == "ASK_JOB"
+
+
+def test_real_call_phrases_2026_10_27():
+    """실통화에서 나온 말: 잘못된 상대·전화 이유 질문을 같은 질문 반복 대신 녹음으로 처리."""
+    d = D()
+    assert d.say("나 간병사 아니야.") == ["wrong_person"]
+    assert d.f.outcome == "WRONG_PERSON"
+    d = D()
+    d.say("네. 네.")
+    assert d.say("네가 그걸 왜 궁금해.") == ["sc_why_call"]
+    assert match("안 알려줄래?").code == "WHY_CALL"

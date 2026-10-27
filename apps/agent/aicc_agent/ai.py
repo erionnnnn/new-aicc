@@ -86,8 +86,12 @@ class GeminiLiveAI(ExceptionAI):  # pragma: no cover - 외부 API, 키·모델 �
 
         async def run() -> tuple[str, bytes]:
             client = genai.Client(api_key=self.api_key)
+            # 기존 녹음과 같은 목소리(여성 Aoede / 남성 Charon)
+            voice = types.SpeechConfig(voice_config=types.VoiceConfig(
+                prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=os.environ.get("AICC_GEMINI_VOICE", "Aoede"))))
             cfg = types.LiveConnectConfig(response_modalities=["AUDIO"],
                                           system_instruction=SYSTEM_PROMPT,
+                                          speech_config=voice,
                                           output_audio_transcription={})
             pcm = bytearray()
             text = []
@@ -110,7 +114,9 @@ class GeminiLiveAI(ExceptionAI):  # pragma: no cover - 외부 API, 키·모델 �
         try:
             text, pcm = asyncio.run(asyncio.wait_for(run(), timeout=timeout_s))
         except Exception as e:  # noqa: BLE001
-            return AIReply(False, None, None, int((time.monotonic() - t0) * 1000), type(e).__name__)
+            # 원인을 로그에서 바로 알 수 있게 오류 내용을 함께 남긴다(키 오류·모델 이름 오류 등)
+            return AIReply(False, None, None, int((time.monotonic() - t0) * 1000),
+                           f"{type(e).__name__}: {str(e)[:200]}")
         # Live API 출력은 24kHz PCM(공식 문서 기준, 배포 시 재확인) → 16kHz 로 변환
         from .audio import resample_linear
         return AIReply(True, limit_sentences(text) or None, resample_linear(pcm, 24000, 16000) if pcm else None,
