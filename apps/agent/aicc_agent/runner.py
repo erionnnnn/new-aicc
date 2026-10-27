@@ -124,7 +124,7 @@ class CallRunner:
                      "ai.start", "ai.failed", "schedule.confirmed", "schedule.confirm_rejected", "silence.timeout",
                      "call.remote_hangup", "call.ended", "tx.barge_in", "call.greeting", "play.filler",
                      "rx.ignored_during_tx",
-                     "call.dial_not_started"):
+                     "call.dial_not_started", "metric.local_latency", "ai.done"):
             p = dict(payload or {})
             if "text" in p:
                 p["text"] = str(p["text"])[:60]
