@@ -148,6 +148,10 @@ function Voice({ me }: { me: Me }) {
                   {busy ? "처리 중…" : "녹음 zip 올리기"}
                   <input type="file" accept=".zip" hidden disabled={busy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) importLegacy(f); }} />
                 </label>
+                <button className="btn" disabled={busy} onClick={() => run(async () => {
+                  const r = await api.post(`/api/v1/voice-packs/${pack.key}/refresh-texts`);
+                  setTtsMsg(r.changed.length ? `완료: 문구 ${r.changed.length}개를 최신으로 바꿨습니다(호칭 ‘선생님’, 새 상황 응답). 이제 ‘빈칸만 Gemini 목소리로 채우기’를 누르세요.` : "완료: 이미 최신 문구입니다.");
+                })}>① 최신 문구로 맞추기</button>
                 <button className="btn" disabled={busy} onClick={() => tts("gemini", true)}>
                   {busy ? "만드는 중… (수 분)" : `빈칸만 Gemini 목소리(${pack.key === "female" ? "Aoede" : "Charon"})로 채우기`}
                 </button>

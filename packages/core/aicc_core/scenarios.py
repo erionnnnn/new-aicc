@@ -19,6 +19,12 @@ import re
 from dataclasses import dataclass
 
 
+# 실제 상담원은 간병사를 '선생님'으로 부른다(회사 통화녹음 분석, 2026-10-27, 사용자 승인).
+# 기존 녹음은 '간병사님'이라, 문구가 바뀐 칸은 녹음을 쓰지 않고 같은 Gemini 목소리로 다시 만든다.
+def honorific(text: str) -> str:
+    return text.replace("간병사님", "선생님")
+
+
 @dataclass(frozen=True)
 class Scenario:
     code: str
@@ -32,6 +38,11 @@ class Scenario:
     @property
     def key(self) -> str:
         return "sc_" + self.code.lower()
+
+    @property
+    def say(self) -> str:
+        """지금 쓰는 문구(호칭 '선생님'). text 는 기존 녹음에 실제로 들어 있는 말."""
+        return honorific(self.text)
 
 
 SCENARIOS: tuple[Scenario, ...] = (
@@ -63,6 +74,13 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario("DRIVING", "END", ("운전중", "차몰", "운전하고"),
              "네, 간병사님. 운전 중이시면 통화하지 않으셔도 됩니다. 다음에 다시 연락드릴게요.", "재연락필요",
              "CALLBACK_REQUESTED", None),
+    # ---- 일정 외 현장 용건(입금·보호자 연락·취소·입실) → 담당자 확인 약속 + 검수 표시 후 일정 질문 계속 ----
+    # 회사 통화녹음 분석(2026-10-27)에서 자주 나온 용건. 녹음이 없어 Gemini 목소리로 만든다.
+    Scenario("WORK_ISSUE", "INFO", (r"입금", r"(?:급여|돈|일당|간병비).{0,6}(?:안\s*들어|언제\s*들어|안\s*나왔|못\s*받|언제\s*나와)",
+                                    r"보호자.{0,6}(?:연락이?\s*안|통화가?\s*안|안\s*받)", "캔슬", r"취소\s*됐", "취소됐",
+                                    r"입실.{0,4}(?:안|못)", "정산"),
+             "아, 그 부분은 담당자가 바로 확인해서 연락드릴게요, 선생님. 그리고 다음 근무는 언제부터 가능하신지도 "
+             "여쭤봐도 될까요?", "현장용건", None, "WORK_ISSUE"),
     # ---- 질문·감정(INFO) ----
     Scenario("NO_JOB_WHY_ASK", "INFO", ("일감없", "일없는데", "없으면서왜"),
              "지금 특정 일감이 있어서 연락드린 건 아니고요. 가능 일정을 미리 확인해두면 조건 맞는 일감이 들어왔을 때 "
@@ -99,6 +117,10 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario("EMOTIONAL_HARD", "INFO", ("힘들었", "힘들어", "지쳤", "고생했", "너무힘"),
              "그러셨군요. 정말 고생 많으셨어요, 간병사님. 조금 쉬시고요. 다음 근무 가능하신 날짜 정해지시면 말씀해 "
              "주시면 일정에 반영해둘게요."),
+    # ---- 근무 중인데 끝나는 날을 모름 → '끝나시면 연락 부탁' 으로 정중히 마무리(실제 상담원 방식) ----
+    Scenario("END_UNKNOWN", "FLOW", (),
+             "아, 그러시군요. 그럼 지금 근무 끝나시면 저희한테 연락 한번 부탁드려요, 선생님. 저희도 다시 연락드릴게요. "
+             "감사합니다.", "종료일미정", "CALLBACK_REQUESTED", "END_DATE_UNKNOWN"),
     # ---- 안 들림·침묵 ----
     Scenario("DIDNT_HEAR", "REPEAT", (),
              "아, 제가 다시 말씀드릴게요. 좋은간병인데요. 간병사님이 언제부터 근무 가능하신지 확인드리려고 연락드렸어요."),
@@ -140,3 +162,7 @@ LEGACY_MAP = {
     "wrong_person": ("WRONG_PERSON", "아, 확인했습니다. 잘못 연락드려 죄송합니다. 해당 번호는 확인이 필요하도록 반영하겠습니다."),
 }
 ACK_SOURCE = "ACK_CONTINUE"  # 앞의 '네,'만 잘라 맞장구(ack)로 쓴다
+
+
+# 지금 쓰는 문구(호칭 '선생님'): 기존 녹음 문구와 다르면 그 칸은 녹음 대신 Gemini 목소리로 다시 만든다
+CURRENT_TEXTS = {**{clip: honorific(t) for clip, (_c, t) in LEGACY_MAP.items()}, **{sc.key: sc.say for sc in SCENARIOS}}

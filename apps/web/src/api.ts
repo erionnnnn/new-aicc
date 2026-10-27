@@ -77,7 +77,7 @@ export const CLIP_LABEL: Record<string, string> = {
   sc_emotional_hard: "공감", sc_didnt_hear: "다시 설명", sc_silence_check: "침묵 확인", sc_silence_end: "침묵 종료",
   sc_no_severe: "환자조건 선호", sc_no_night: "야간 불가", sc_weekday_only: "평일만", sc_weekend_only: "주말만",
   sc_preferred_hospital: "선호 병원", sc_high_pay_only: "급여 선호", sc_text_request: "문자 요청", sc_rest: "당분간 휴식",
-  sc_unknown_schedule: "일정 미정", sc_driving: "운전 중", sc_available_now: "즉시 가능(미사용)",
+  sc_unknown_schedule: "일정 미정", sc_driving: "운전 중", sc_work_issue: "현장 용건(입금·보호자 등) 담당자 연결", sc_end_unknown: "종료일 모름 → 끝나면 연락 요청", sc_available_now: "즉시 가능(미사용)",
 };
 
 export function koDate(iso: string): string {

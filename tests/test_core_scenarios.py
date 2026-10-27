@@ -169,3 +169,25 @@ def test_conversation_mode_opening_no_is_not_hangup():
 def test_wrong_person_variants():
     d = D()
     assert d.say("나 간병이 아닌데?") == ["wrong_person"]
+
+
+def test_work_issue_promises_followup_marks_review_and_continues():
+    d = D()
+    d.say("네")
+    assert d.say("근데 저번 입금이 아직 안 됐어요") == ["sc_work_issue"]
+    assert "WORK_ISSUE" in d.f.review_reasons and d.f.state == "WAIT_AVAILABILITY" and not d.f.finished
+    assert d.say("다음 주 월요일부터요") == ["confirm_date"]
+
+
+def test_working_but_end_unknown_asks_to_call_back():
+    d = D()
+    d.say("네")
+    d.say("지금 일하고 있어요")
+    assert d.say("언제 끝날지 모르겠어요") == ["sc_end_unknown"]
+    assert d.f.outcome == "CALLBACK_REQUESTED" and "END_DATE_UNKNOWN" in d.f.review_reasons
+
+
+def test_honorific_is_seonsaengnim():
+    from aicc_core.scenarios import CURRENT_TEXTS
+    assert all("간병사님" not in t for t in CURRENT_TEXTS.values())
+    assert CURRENT_TEXTS["opening"].startswith("안녕하세요, 선생님")

@@ -325,6 +325,10 @@ class CallFlow:
             if self._pick(it, "START"):
                 return self._from_available(it, eid)
             return self._go("ASK_AVAILABLE_DATE")
+        if it.intent == "UNKNOWN_DATE":
+            done = self._end_unknown(it)
+            if done is not None:
+                return done
         if it.intent in ("UNKNOWN_DATE", "RANGE"):
             rng = next((m for m in it.dates if m.kind == "RANGE"), None)
             self.obs.end_date_text = rng.source if rng else it.text
@@ -362,6 +366,10 @@ class CallFlow:
                 return [self._play("closing"), HangUp("range"), *self._end("UNCONFIRMED")]
             return self._reprompt(it, same_question=True)
         if it.intent == "UNKNOWN_DATE":
+            if self.obs.work_status == "WORKING" and self.obs.end_date is None:
+                done = self._end_unknown(it)
+                if done is not None:
+                    return done
             self.obs.confirmation_state = "UNKNOWN"
             self.obs.available_text = it.text
             self.review_reasons.append("DATE_UNKNOWN")
@@ -451,11 +459,29 @@ class CallFlow:
     def _scenario_play(self, s: Scenario, eid: str) -> list[Action]:
         self.scenario_count += 1
         self.obs.history.append({"event": "SCENARIO", "code": s.code, "event_id": eid})
+        extra: list[Action] = []
+        if s.review and s.review not in self.review_reasons:  # 예: 입금·현장 문제 → 담당자 확인 필요 표시
+            self.review_reasons.append(s.review)
+            extra.append(MarkReview(s.review))
+            if s.note and s.note not in self.obs.notes:
+                self.obs.notes.append(s.note)
         play = self._play(s.key)
         if self.state == "CONFIRM_DATE":
-            return [play, self._question()]  # 답한 뒤 날짜 재확인을 다시
+            return [*extra, play, self._question()]  # 답한 뒤 날짜 재확인을 다시
         self.state = "WAIT_AVAILABILITY"
-        return [play]
+        return [*extra, play]
+
+    def _end_unknown(self, it: Interpretation) -> list[Action] | None:
+        """근무 중인데 끝나는 날을 모름 → '끝나시면 연락 부탁드려요'로 마무리(녹음이 있을 때만)."""
+        s = BY_CODE["END_UNKNOWN"]
+        if not self._has(s.key):
+            return None
+        self.obs.end_date_text = it.text
+        self.obs.history.append({"event": "END_DATE_UNKNOWN", "text": it.text})
+        if s.note not in self.obs.notes:
+            self.obs.notes.append(s.note)
+        self.review_reasons.append(s.review)
+        return [self._play(s.key), MarkReview(s.review), HangUp("end_unknown"), *self._end(s.outcome)]
 
     # ---------- 보조 ----------
     def _pick(self, it: Interpretation, role: str | None) -> DateMention | None:

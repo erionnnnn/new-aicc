@@ -247,7 +247,7 @@ def test_import_legacy_recordings_zip(admin):
     admin.put("/api/v1/settings", json={"company_name": "좋은간병"})
     buf = _io.BytesIO()
     with zipfile.ZipFile(buf, "w") as z:
-        codes = {c for c, _ in LEGACY_MAP.values()} | {s.code for s in SCENARIOS}
+        codes = ({c for c, _ in LEGACY_MAP.values()} | {s.code for s in SCENARIOS}) - {"WORK_ISSUE", "END_UNKNOWN"}
         for code in codes:
             body = _wav([(100, 0), (300, 8000), (250, 0), (900, 8000)]) if code == "ACK_CONTINUE" else _wav([(400, 6000)])
             z.writestr(f"recordings/{code}.wav", body)
@@ -257,11 +257,16 @@ def test_import_legacy_recordings_zip(admin):
                      headers=admin._h())
     assert r.status_code == 200, r.text
     out = r.json()
-    assert "opening" in out["imported"] and "sc_ask_pay" in out["imported"] and "ack" in out["imported"]
-    assert out["clips"]["opening"]["text"].startswith("안녕하세요, 간병사님")
+    assert "closing" in out["imported"] and "sc_ask_pay" in out["imported"] and "ack" in out["imported"]
+    # '간병사님' 녹음은 호칭을 '선생님'으로 바꿔 다시 만들 칸으로 남김
+    assert "opening" in out["regenerate"] and out["clips"]["opening"]["has_file"] is False
+    assert out["clips"]["opening"]["text"].startswith("안녕하세요, 선생님")
+    assert out["clips"]["sc_work_issue"]["has_file"] is False and out["clips"]["sc_end_unknown"]["has_file"] is False
     ack_ms = out["clips"]["ack"]["duration_ms"]
     assert 300 <= ack_ms <= 600  # 앞의 '네,'(0.3초)만 잘림, 뒤 문장은 제외
     assert out["clips"]["ask_working"]["has_file"] is False  # 녹음 없는 자리는 비어 있음(Gemini 로 채움)
     r = admin.c.post("/api/v1/voice-packs/male/import-legacy", files={"file": ("recordings.zip", buf.getvalue())},
                      headers=admin._h())
-    assert r.status_code == 200 and "opening" in r.json()["imported"]
+    assert r.status_code == 200 and "closing" in r.json()["imported"]
+    r = admin.post("/api/v1/voice-packs/female/refresh-texts")
+    assert r.status_code == 200 and r.json()["changed"] == []  # 이미 최신

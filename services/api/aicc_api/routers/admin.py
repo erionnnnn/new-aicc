@@ -308,7 +308,7 @@ async def import_legacy(key: str, file: UploadFile = File(...), p: Principal = D
     """기존 프로그램 녹음 zip(recordings/*.wav)을 안내 자리·상황 응답에 자동 배정한다(대사는 scenarios.py)."""
     import zipfile
 
-    from aicc_core.scenarios import ACK_SOURCE, LEGACY_MAP, SCENARIOS
+    from aicc_core.scenarios import ACK_SOURCE, LEGACY_MAP, SCENARIOS, honorific
 
     require(p, "settings")
     cur = services.latest_pack(db, p.org.id, key)
@@ -334,10 +334,16 @@ async def import_legacy(key: str, file: UploadFile = File(...), p: Principal = D
     if not files:
         raise AppError(422, "ZIP_EMPTY", "zip 안에 이 목소리용 WAV 가 없습니다(여성: OPENING.wav, 남성: OPENING_MALE.wav 형식)")
     m = with_optional(cur.manifest)
-    imported, missing = [], []
+    imported, missing, regen = [], [], []
     plan = [(clip, code, text) for clip, (code, text) in LEGACY_MAP.items()]
     plan += [(sc.key, sc.code, sc.text) for sc in SCENARIOS]
     for clip, code, text in plan:
+        if honorific(text) != text:
+            # 호칭이 '선생님'으로 바뀐 문구: 기존 녹음('간병사님')은 쓰지 않고 같은 목소리로 다시 만든다
+            if m["clips"][clip].get("text") != honorific(text) or m["clips"][clip].get("file"):
+                m["clips"][clip].update(file=None, text=honorific(text), source="regen:honorific")
+            regen.append(clip)
+            continue
         if code not in files:
             missing.append(code)
             continue
@@ -357,7 +363,37 @@ async def import_legacy(key: str, file: UploadFile = File(...), p: Principal = D
     audit(db, p, "voicepack.import_legacy", "voice_pack", vp.id, {"key": key, "imported": len(imported),
                                                                   "missing": missing})
     db.commit()
-    return {**_pack_out(db, p, vp), "imported": imported, "missing_legacy": missing}
+    return {**_pack_out(db, p, vp), "imported": imported, "missing_legacy": missing, "regenerate": regen}
+
+
+@router.post("/voice-packs/{key}/refresh-texts")
+def refresh_texts(key: str, p: Principal = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    """녹음 문구를 최신(호칭 '선생님', 새 상황 응답)으로 맞춘다. 문구가 바뀐 칸만 녹음을 비워 다시 만들게 한다."""
+    from aicc_core.scenarios import CURRENT_TEXTS
+
+    require(p, "settings")
+    cur = services.latest_pack(db, p.org.id, key)
+    if cur is None:
+        raise AppError(404, "NOT_FOUND", "음원팩이 없습니다")
+    m = with_optional(cur.manifest)
+    changed = []
+    for clip, text in CURRENT_TEXTS.items():
+        c = m["clips"].get(clip)
+        if c is None:
+            continue
+        old = c.get("text") or ""
+        # 직접 고친 문구는 건드리지 않고, 기존 녹음 문구('간병사님')나 기본 문구일 때만 바꾼다
+        if old != text and (old.replace("간병사님", "선생님") == text or not c.get("file")):
+            c.update(text=text, file=None, source="regen:refresh")
+            changed.append(clip)
+    if not changed:
+        return {**_pack_out(db, p, cur), "changed": []}
+    m["approved_by"] = None
+    m["company_name"] = p.org.company_name
+    vp = _new_version(db, p, key, m)
+    audit(db, p, "voicepack.refresh_texts", "voice_pack", vp.id, {"key": key, "changed": changed})
+    db.commit()
+    return {**_pack_out(db, p, vp), "changed": changed}
 
 
 class PackPatch(BaseModel):

@@ -44,7 +44,7 @@ DEFAULT_SCRIPTS = {
     "ai_failed": "죄송합니다. 지금은 답변드리기 어려워서 담당자가 다시 연락드리겠습니다.",
     "wrong_person": "잘못 연락드려 죄송합니다. 좋은 하루 보내세요.",
     "ack": "네,",
-    **{sc.key: sc.text for sc in SCENARIOS},
+    **{sc.key: sc.say for sc in SCENARIOS},
 }
 
 
