@@ -69,9 +69,17 @@ class Agent:
             except ApiError as e:
                 return StepResult("CLAIM_ERROR", message=e.code)
             if claim.get("status") != "CALL":
-                return StepResult(claim.get("status", "IDLE"), message=claim.get("message"))
+                st = claim.get("status", "IDLE")
+                if st not in ("IDLE",) and st != getattr(self, "_last_status", None):
+                    log.warning("발신 대기: %s %s %s", st, claim.get("message") or "", claim.get("reasons") or "")
+                self._last_status = st
+                return StepResult(st, message=claim.get("message"))
+            self._last_status = "CALL"
             self.runner.stop_requested = False
+            log.info("통화 시작: call=%s 시험=%s", claim["call_id"][:8], claim.get("pilot"))
             summary = self.runner.run(claim)
+            log.info("통화 종료: call=%s 결과=%s 확정일=%s 검수=%s 오류=%s", summary.call_id[:8], summary.outcome,
+                     summary.confirmed_date, summary.review_reasons, summary.errors)
             return StepResult("CALLED", summary)
 
     def run_forever(self, stop: threading.Event, idle_wait_s: float = 2.0) -> None:  # pragma: no cover

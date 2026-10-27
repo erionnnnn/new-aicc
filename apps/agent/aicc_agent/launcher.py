@@ -164,6 +164,9 @@ def _run(argv: list[str] | None = None) -> int:  # pragma: no cover - 프로세�
     data_dir.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s",
                         handlers=[logging.StreamHandler(), logging.FileHandler(data_dir / "aicc.log", encoding="utf-8")])
+    # 2초마다 반복되는 상태 보고·발신권 요청 로그는 숨기고, 통화 관련 기록만 남긴다
+    for noisy in ("httpx", "httpcore", "uvicorn.access"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
     url = f"http://{'127.0.0.1' if a.host in ('0.0.0.0', '') else a.host}:{a.port}"
     if _port_open("127.0.0.1", a.port):
         print(f"이미 실행 중입니다. 관리화면을 엽니다: {url}")

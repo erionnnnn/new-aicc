@@ -105,6 +105,15 @@ class CallRunner:
     # ---------------- 이벤트 ----------------
     def _emit(self, type_: str, turn: int, payload: dict | None = None, event_id: str | None = None) -> str:
         eid = event_id or new_event_id()
+        if type_ in ("call.answered", "call.not_answered", "call.answer_unknown", "play", "utterance.final",
+                     "ai.start", "ai.failed", "schedule.confirmed", "schedule.confirm_rejected", "silence.timeout",
+                     "call.remote_hangup", "call.ended", "tx.barge_in"):
+            p = dict(payload or {})
+            if "text" in p:
+                p["text"] = str(p["text"])[:60]
+            log.info("[통화 %s] %s %s", getattr(self, "call_id", "?")[:8], type_,
+                     {k: v for k, v in p.items() if k in ("key", "text", "reason", "outcome", "date", "code",
+                                                         "stt_latency_ms", "detail", "error", "state")})
         self._seq += 1
         self._buf.append({"event_id": eid, "seq": self._seq, "turn_id": turn, "type": type_,
                           "occurred_at": datetime.now(timezone.utc).isoformat(), "payload": payload or {}})
@@ -142,6 +151,7 @@ class CallRunner:
         try:
             self._call(claim["phone"])
         except DeviceError as e:
+            log.error("[통화 %s] 장치 오류: %s", self.call_id[:8], e)
             self.summary.errors.append(str(e)[:200])
             self._apply(self.flow.device_error(type(e).__name__))
         except ApiError as e:
