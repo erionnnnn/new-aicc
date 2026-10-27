@@ -91,9 +91,40 @@ def synth_sapi(text: str, pack_key: str) -> bytes:  # pragma: no cover - Windows
 
 
 GEMINI_VOICES = {"female": "Aoede", "male": "Charon"}  # 기존 프로그램 v11.44 와 같은 목소리(VOICE_SELECTION_v11_44.md)
-# 모델 이름은 자주 바뀐다(2026-10 확인: gemini-3.1-flash-tts-preview, gemini-2.5-pro-preview-tts 등). 앞에서부터 시도.
-GEMINI_TTS_MODELS = ("gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts", "gemini-2.5-pro-preview-tts")
-_gemini_model_ok: str | None = None
+# 모델 이름은 자주 바뀐다(Gemini API 변경 기록 2026-10-27 확인: gemini-3.8-flash-tts GA 2026-09-22).
+# 처음 성공한 모델을 파일(.aicc/tts_model.txt)에 고정해, 이후 안내·AI 답 모두 같은 모델·같은 목소리로 만든다.
+GEMINI_TTS_MODELS = ("gemini-3.8-flash-tts", "gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts")
+# 모든 안내에 같은 말투 지시를 쓴다(지시가 다르면 같은 목소리라도 다르게 들림)
+STYLE = "차분하고 친절한 30대 한국어 여성 상담원이 전화로 또박또박 말하듯, 문장 그대로만 읽어 주세요: "
+STYLE_MALE = "차분하고 친절한 한국어 남성 상담원이 전화로 또박또박 말하듯, 문장 그대로만 읽어 주세요: "
+
+
+def _model_file():  # noqa: ANN202
+    import os
+    from pathlib import Path
+    return Path(os.environ.get("AICC_DATA_DIR", ".aicc")) / "tts_model.txt"
+
+
+def pinned_model() -> str | None:
+    try:
+        m = _model_file().read_text(encoding="utf-8").strip()
+        return m or None
+    except OSError:
+        return None
+
+
+def _pin(model: str) -> None:
+    try:
+        f = _model_file()
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(model, encoding="utf-8")
+    except OSError:
+        pass
+
+
+def voice_tag(pack_key: str) -> str:
+    """음원 출처 표시(같은 표시 = 같은 모델·목소리·말투로 만든 음원)."""
+    return f"tts:gemini:{pinned_model() or '?'}:{GEMINI_VOICES.get(pack_key, 'Aoede')}"
 
 
 def _pcm24_to_wav16k(data: bytes) -> bytes:
@@ -109,8 +140,7 @@ def _pcm24_to_wav16k(data: bytes) -> bytes:
 
 
 def synth_gemini(text: str, pack_key: str, api_key: str | None, model: str | None = None) -> bytes:  # pragma: no cover
-    """기존 녹음과 같은 Gemini 목소리(여성 Aoede / 남성 Charon)로 만든다. 이 PC 에 저장된 Gemini 키 사용."""
-    global _gemini_model_ok
+    """Gemini 목소리(여성 Aoede / 남성 Charon)로 만든다. 모델이 고정된 뒤에는 다른 모델로 바꾸지 않는다."""
     if not api_key:
         raise TTSError("Gemini 키가 없습니다(설정 > 단말 > 이 PC 에이전트에서 입력)")
     try:
@@ -125,21 +155,23 @@ def synth_gemini(text: str, pack_key: str, api_key: str | None, model: str | Non
         response_modalities=["AUDIO"],
         speech_config=types.SpeechConfig(voice_config=types.VoiceConfig(
             prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice))))
-    models = [m for m in (model, _gemini_model_ok, *GEMINI_TTS_MODELS) if m]
+    pinned = model or pinned_model()
+    models = [pinned] if pinned else list(GEMINI_TTS_MODELS)  # 고정되면 그 모델만(목소리 통일)
+    style = STYLE_MALE if pack_key == "male" else STYLE
     last = ""
-    for m in dict.fromkeys(models):
-        for attempt in range(4):
+    for m in models:
+        for attempt in range(6):
             try:
-                resp = client.models.generate_content(
-                    model=m, contents=f"차분하고 친절한 한국어 상담원 말투로, 문장 그대로만 읽어 주세요: {text}", config=cfg)
+                resp = client.models.generate_content(model=m, contents=style + text, config=cfg)
                 part = resp.candidates[0].content.parts[0]
                 data = part.inline_data.data
                 if isinstance(data, str):
                     data = base64.b64decode(data)
                 if not data:
                     raise TTSError("빈 음성")
-                _gemini_model_ok = m
-                return _pcm24_to_wav16k(data)
+                if not pinned:
+                    _pin(m)
+                return normalize_wav(_pcm24_to_wav16k(data))
             except TTSError:
                 raise
             except Exception as e:  # noqa: BLE001
@@ -149,11 +181,48 @@ def synth_gemini(text: str, pack_key: str, api_key: str | None, model: str | Non
                                    "키(보통 AIza 로 시작)를 다시 붙여 넣으세요. 브라우저가 로그인 비밀번호를 자동으로 채웠을 수 있습니다."
                                    ) from None
                 last = f"{m}: {type(e).__name__} {msg[:160]}"
-                if "429" in msg or "RESOURCE_EXHAUSTED" in msg or "503" in msg:
-                    time.sleep(8 * (attempt + 1))  # 분당 요청 한도 — 기다렸다 재시도
+                if "429" in msg or "RESOURCE_EXHAUSTED" in msg or "503" in msg or "500" in msg:
+                    time.sleep(8 * (attempt + 1))  # 분당 요청 한도·일시 오류 — 같은 모델로 기다렸다 재시도
                     continue
-                break  # 모델 없음·권한 등 → 다음 모델
+                break  # 모델 없음 → (고정 전이면) 다음 모델
     raise TTSError(f"Gemini 음성 생성 실패 — {last}")
+
+
+def normalize_wav(wav16k: bytes, target_dbfs: float = -20.0, peak_dbfs: float = -1.5) -> bytes:
+    """음량을 같은 크기로 맞춘다(안내마다 크기가 다르면 다른 목소리처럼 들림). 말소리 구간 RMS 기준."""
+    import math
+    from array import array
+    with wave.open(io.BytesIO(wav16k)) as w:
+        if w.getsampwidth() != 2 or w.getnchannels() != 1:
+            return wav16k
+        rate, raw = w.getframerate(), w.readframes(w.getnframes())
+    a = array("h")
+    a.frombytes(raw)
+    if not a:
+        return wav16k
+    win = max(1, rate // 50)  # 20ms
+    levels = []
+    for i in range(0, len(a) - win + 1, win):
+        seg = a[i:i + win]
+        levels.append(math.sqrt(sum(x * x for x in seg) / len(seg)))
+    if not levels:
+        return wav16k
+    top = max(levels)
+    voiced = [v for v in levels if v >= top * 0.1] or levels
+    rms = math.sqrt(sum(v * v for v in voiced) / len(voiced))
+    if rms < 1:
+        return wav16k
+    gain = (32768 * 10 ** (target_dbfs / 20)) / rms
+    peak = max(abs(x) for x in a) or 1
+    gain = min(gain, (32768 * 10 ** (peak_dbfs / 20)) / peak)
+    out = array("h", (max(-32768, min(32767, int(x * gain))) for x in a))
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(out.tobytes())
+    return buf.getvalue()
 
 
 def synthesize(engine: str, text: str, pack_key: str, *, api_key: str | None = None, model: str | None = None) -> bytes:

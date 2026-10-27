@@ -167,6 +167,9 @@ def _apply_company(text: str, company: str) -> str:
 
 def _store_clip(p: Principal, key: str, clip: str, wav16k: bytes) -> dict:
     import hashlib
+
+    from ..tts import normalize_wav
+    wav16k = normalize_wav(wav16k)  # 모든 안내를 같은 음량으로(크기 차이도 다른 목소리처럼 들림)
     h = hashlib.sha256(wav16k).hexdigest()[:16]
     fname = f"{key}/{clip}-{h}.wav"
     path = services.packs_dir(p.org.id) / fname
@@ -206,6 +209,7 @@ class TTSIn(BaseModel):
     engine: str = Field(default="edge", pattern="^(gemini|edge|sapi|test)$")
     only_missing: bool = False
     max_items: int = Field(default=0, ge=0, le=200)  # 0 = 전부. Gemini 는 분당 한도가 있어 화면이 나눠 요청한다
+    unify: bool = False  # 목소리 통일: 같은 모델·목소리·말투로 만든 것이 아닌 모든 칸(기존 녹음 포함)을 다시 만든다
 
 
 @router.post("/voice-packs/{key}/tts")
@@ -228,7 +232,10 @@ def generate_tts(key: str, body: TTSIn, p: Principal = Depends(current_user), db
     env = _read_agent_env() if body.engine == "gemini" else {}
     remaining = 0
     for clip, c in m["clips"].items():
-        if body.only_missing and c.get("file"):
+        if body.unify:
+            if c.get("file") and c.get("source") == tts.voice_tag(key):
+                continue  # 이미 통일된 목소리
+        elif body.only_missing and c.get("file"):
             continue
         if body.max_items and made + len(failed) >= body.max_items:
             remaining += 1
@@ -244,7 +251,8 @@ def generate_tts(key: str, body: TTSIn, p: Principal = Depends(current_user), db
             if made == 0:  # 첫 문구부터 실패하면 같은 원인이므로 바로 중단
                 break
             continue
-        c.update(_store_clip(p, key, clip, wav16k), text=text, source=f"tts:{body.engine}")
+        c.update(_store_clip(p, key, clip, wav16k), text=text,
+                 source=tts.voice_tag(key) if body.engine == "gemini" else f"tts:{body.engine}")
         made += 1
     if made:
         m["company_name"] = p.org.company_name

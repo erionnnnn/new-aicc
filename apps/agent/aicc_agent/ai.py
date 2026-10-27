@@ -173,11 +173,72 @@ class GeminiLiveAI(ExceptionAI):  # pragma: no cover - 외부 API
         return AIReply(False, None, None, int((time.monotonic() - t0) * 1000), " | ".join(errors)[:400] or "timeout")
 
 
+TEXT_MODELS = ("gemini-3.5-flash-lite", "gemini-3.8-flash")  # 빠른 순(2026-10-27 변경 기록 확인)
+
+
+class GeminiTTSAI(ExceptionAI):  # pragma: no cover - 외부 API
+    """목소리 통일용: 답 문장은 글 모델로 만들고, 음성은 안내 녹음과 '같은 TTS 모델·목소리·말투'로 읽는다.
+
+    Live(실시간 음성) 모델은 같은 이름의 목소리라도 TTS 모델과 음색이 달라 안내와 다르게 들린다(2026-10-27 사용자 지적).
+    대신 글 생성 + 음성 생성 두 단계라 Live 보다 1~2초 느릴 수 있다.
+    """
+
+    name = "gemini-tts"
+
+    def __init__(self, api_key: str | None = None):
+        self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
+        self.voice = "Aoede"
+        self._ok_model: str | None = None
+        if not self.api_key:
+            raise RuntimeError("GEMINI_API_KEY 가 필요합니다")
+
+    def respond(self, question: str, *, timeout_s: float = 10.0, context: str | None = None) -> AIReply:
+        import concurrent.futures as cf
+
+        def work() -> tuple[str, bytes]:
+            from google import genai
+            from google.genai import types
+            client = genai.Client(api_key=self.api_key)
+            cfg = types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT, max_output_tokens=120, temperature=0.6)
+            text, err = "", ""
+            for m in [x for x in (self._ok_model, os.environ.get("AICC_GEMINI_TEXT_MODEL"), *TEXT_MODELS) if x]:
+                try:
+                    r = client.models.generate_content(model=m, contents=context or question, config=cfg)
+                    text = (r.text or "").strip()
+                    if text:
+                        self._ok_model = m
+                        break
+                except Exception as e:  # noqa: BLE001
+                    err = f"{m}: {type(e).__name__}: {str(e)[:120]}"
+            if not text:
+                raise RuntimeError(err or "빈 답")
+            text = limit_sentences(text)
+            from aicc_api.tts import synth_gemini
+            pack = "male" if self.voice == "Charon" else "female"
+            wav = synth_gemini(text, pack, self.api_key)
+            import io
+            import wave
+            with wave.open(io.BytesIO(wav)) as w:
+                return text, w.readframes(w.getnframes())
+
+        t0 = time.monotonic()
+        ex = cf.ThreadPoolExecutor(max_workers=1)
+        try:
+            text, pcm = ex.submit(work).result(timeout=timeout_s)
+        except Exception as e:  # noqa: BLE001
+            return AIReply(False, None, None, int((time.monotonic() - t0) * 1000), f"{type(e).__name__}: {str(e)[:300]}")
+        finally:
+            ex.shutdown(wait=False)
+        return AIReply(True, text, pcm, int((time.monotonic() - t0) * 1000))
+
+
 def make_ai(kind: str) -> ExceptionAI:
     if kind == "mock":
         return MockAI()
     if kind == "gemini-live":
         return GeminiLiveAI()
+    if kind == "gemini-tts":
+        return GeminiTTSAI()
     if kind == "failing":
         return FailingAI()
     raise ValueError(f"예외 AI 가 설정되지 않았습니다: {kind!r}")

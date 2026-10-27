@@ -79,7 +79,7 @@ function Voice({ me }: { me: Me }) {
   const [busy, setBusy] = useState(false);
   const [ttsMsg, setTtsMsg] = useState("");
 
-  async function tts(engine: string, onlyMissing = false) {
+  async function tts(engine: string, onlyMissing = false, unify = false) {
     if (!pack) return;
     setErr(null); setTtsMsg(""); setBusy(true);
     try {
@@ -87,7 +87,7 @@ function Voice({ me }: { me: Me }) {
       let made = 0; const failed: any[] = [];
       for (;;) {
         const r = await api.post(`/api/v1/voice-packs/${pack.key}/tts`,
-          { engine, only_missing: onlyMissing || engine === "gemini", max_items: engine === "gemini" ? 6 : 0 });
+          { engine, only_missing: !unify && (onlyMissing || engine === "gemini"), unify, max_items: engine === "gemini" ? 6 : 0 });
         made += r.generated; failed.push(...r.failed);
         packs.reload();
         if (engine !== "gemini" || !r.remaining || r.generated === 0) break;
@@ -152,11 +152,16 @@ function Voice({ me }: { me: Me }) {
                   const r = await api.post(`/api/v1/voice-packs/${pack.key}/refresh-texts`);
                   setTtsMsg(r.changed.length ? `완료: 문구 ${r.changed.length}개를 최신으로 바꿨습니다(호칭 ‘선생님’, 새 상황 응답). 이제 ‘빈칸만 Gemini 목소리로 채우기’를 누르세요.` : "완료: 이미 최신 문구입니다.");
                 })}>① 최신 문구로 맞추기</button>
+                <button className="btn primary" disabled={busy} onClick={() => tts("gemini", false, true)}>
+                  {busy ? "만드는 중… (10분 안팎)" : `전체 목소리 통일(${pack.key === "female" ? "Aoede" : "Charon"}로 모두 다시 만들기)`}
+                </button>
                 <button className="btn" disabled={busy} onClick={() => tts("gemini", true)}>
                   {busy ? "만드는 중… (수 분)" : `빈칸만 Gemini 목소리(${pack.key === "female" ? "Aoede" : "Charon"})로 채우기`}
                 </button>
               </div>
-              <p className="muted small">Gemini 목소리는 설정 &gt; 단말 &gt; 이 PC 에이전트에 저장한 Gemini 키로 만듭니다(인터넷 필요).</p>
+              <p className="muted small">Gemini 목소리는 설정 &gt; 단말 &gt; 이 PC 에이전트에 저장한 Gemini 키로 만듭니다(인터넷 필요).
+                ‘전체 목소리 통일’은 기존 녹음까지 모든 안내를 같은 모델·목소리·말투·음량으로 다시 만들고, 통화 중 AI 답도 같은 방식으로 읽습니다.
+                중간에 멈추면 다시 누르면 이어서 합니다.</p>
               <h3>자동 음성으로 한 번에 만들기</h3>
               <p className="muted small">아래 문구 전체와 날짜 조각 43개를 합성 음성으로 만듭니다(기존 녹음이 있으면 위 ‘가져오기’를 쓰세요). 오프닝의 [회사명]은 운영 정책의 회사명으로 바뀝니다.
                 만든 뒤 몇 개를 들어 보고 ‘이 버전 승인’을 눌러야 실제 통화에 쓰입니다.</p>

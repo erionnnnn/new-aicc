@@ -59,7 +59,7 @@ class RunnerConfig:
     vad_end_ms: int = 350
     vad_threshold: float = 300.0
     ai_wait_after_ms: int = 3000  # AI 답이 이보다 늦을 때만 '잠시만요'(매번 나오면 기계 같음)
-    ai_timeout_s: float = 10.0
+    ai_timeout_s: float = 12.0  # 글 생성 + 같은 목소리 음성 생성(두 단계)
     barge_in: bool = True
     state_check_ms: int = 1000
 

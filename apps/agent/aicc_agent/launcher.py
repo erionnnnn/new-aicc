@@ -84,7 +84,8 @@ def build_agent(env: dict[str, str], base: str):  # noqa: ANN201
         os.environ["GEMINI_API_KEY"] = env["GEMINI_API_KEY"]
         # 모델 칸이 비었거나 잘못돼도(예: 'gemini3.5flash') 알려진 Live 모델을 차례로 시도한다
         os.environ["AICC_GEMINI_MODEL"] = gm if gm.removeprefix("models/").startswith("gemini-") else ""
-        ai = make_ai("gemini-live")
+        # 기본: 안내 녹음과 같은 TTS 목소리로 답(목소리 통일). AICC_AI_VOICE=live 면 실시간 음성(Live, 음색 다름)
+        ai = make_ai("gemini-live" if env.get("AICC_AI_VOICE") == "live" else "gemini-tts")
     else:
         ai = FailingAI()  # 키가 없으면 예외 질문은 '상담 요청'으로 넘기고 날짜는 저장하지 않는다
     return Agent(client, dev, stt, ai)
