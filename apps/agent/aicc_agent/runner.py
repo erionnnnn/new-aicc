@@ -203,6 +203,8 @@ class CallRunner:
         self.flow.dialing()
         self._emit("call.dialing", 0, {"mock": self.is_mock})
         self.device.dial(phone)
+        if hasattr(self.stt, "begin_call") and not self.is_mock:
+            self.stt.begin_call()  # 신호 가는 동안 인식 서버 연결
         self._preload_queue = self._preload_list()
         t0 = self.device.now_ms()
         progressed = False  # 발신이 실제로 시작된 것(DIALING/ALERTING/OFFHOOK)을 한 번이라도 봤는지
@@ -574,6 +576,8 @@ class CallRunner:
 
     # ---------------- 마무리 ----------------
     def _finalize(self) -> None:
+        if hasattr(self.stt, "end_call"):
+            self.stt.end_call()
         outcome = self.flow.outcome or "DEVICE_ERROR"
         if outcome == "CONFIRMED" and self.confirm_failed:
             outcome = "UNCONFIRMED"

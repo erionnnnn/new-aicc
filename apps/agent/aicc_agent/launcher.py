@@ -78,7 +78,10 @@ def build_agent(env: dict[str, str], base: str):  # noqa: ANN201
     dev = A24Device(Adb(serial=serial), route, state_file=data / "probe_state.json", rx=rx, tx=tx)
     from .ai import FailingAI
 
-    stt = make_stt(env.get("AICC_STT_ENGINE") or "faster-whisper")
+    # 기본: Gemini 키가 있으면 Google 실시간 인식(빠름, 실패 시 PC 인식으로 대신), 없으면 PC 인식
+    if env.get("GEMINI_API_KEY"):
+        os.environ["GEMINI_API_KEY"] = env["GEMINI_API_KEY"]
+    stt = make_stt(env.get("AICC_STT_ENGINE") or ("gemini-live" if env.get("GEMINI_API_KEY") else "faster-whisper"))
     gm = (env.get("AICC_GEMINI_MODEL") or "").strip()
     if env.get("GEMINI_API_KEY"):
         os.environ["GEMINI_API_KEY"] = env["GEMINI_API_KEY"]

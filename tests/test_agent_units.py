@@ -223,3 +223,13 @@ def test_no_barge_in_for_closing_plays_to_end():
     r._emit = lambda *a, **k: "e"
     r._play_async(Play("closing", 1), b"\x00" * 64000, [], 0)
     assert dev.stopped_at is None and dev.t >= 2000
+
+
+def test_google_stt_falls_back_to_pc_on_failure():
+    from aicc_agent.device import Frame
+    from aicc_agent.stt import GeminiLiveSTT, MockSTT
+    stt = GeminiLiveSTT("invalid-key", fallback=MockSTT(), timeout_s=0.5)
+    stt.begin_call()
+    r = stt.transcribe([Frame(b"\x00" * 640, 0, mock_text="네 맞아요")])
+    assert r.text == "네 맞아요" and "대신" in r.engine and stt.last_error
+    stt.end_call()
