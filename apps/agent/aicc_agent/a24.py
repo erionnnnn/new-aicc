@@ -312,8 +312,11 @@ class A24Device(DeviceAdapter):
     def tx_async(self) -> bool:
         return self.tx is not None and hasattr(self.tx, "play_async")
 
-    def tx_play_async(self, pcm: bytes) -> None:
-        self.tx.play_async(pcm)
+    def tx_play_async(self, pcm: bytes, key: str | None = None) -> None:
+        self.tx.play_async(pcm, key)
+
+    def tx_preload(self, key: str, pcm: bytes) -> bool:
+        return bool(self.tx is not None and hasattr(self.tx, "preload") and self.tx.preload(key, pcm))
 
     def tx_poll(self) -> bool:
         """재생이 끝났으면 True."""

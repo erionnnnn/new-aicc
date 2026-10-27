@@ -130,11 +130,12 @@ def test_adb_ready_then_runs(monkeypatch):
 class AsyncTxDevice:
     """파일 송출(비동기) 단말 흉내: 재생은 play_ms 동안 이어지고, 정해진 시각에 상대가 말한다."""
 
-    def __init__(self, play_ms=3000, speech=(500, 1100)):
+    def __init__(self, play_ms=3000, speech=(500, 1100), amp=4000):
         self.t = 0
+        self.amp = amp
         self.play_ms = play_ms
         self.speech = speech
-        self.play_end = None
+        self.play_end = 0
         self.stopped_at = None
 
     def now_ms(self):
@@ -143,7 +144,7 @@ class AsyncTxDevice:
     def tx_async(self):
         return True
 
-    def tx_play_async(self, pcm):
+    def tx_play_async(self, pcm, key=None):
         self.play_end = self.t + self.play_ms
 
     def tx_poll(self):
@@ -158,47 +159,67 @@ class AsyncTxDevice:
         out = []
         for _ in range(ms // 20):
             loud = self.speech[0] <= self.t < self.speech[1]
-            out.append(Frame(tone(20)[:640] if loud else b"\x00" * 640, self.t))
+            out.append(Frame(tone(20, 300.0, self.amp)[:640] if loud else b"\x00" * 640, self.t))
             self.t += 20
         return out
 
 
-def test_barge_in_during_file_playback_answers_current_question():
+class VB:
+    def render(self, a):
+        return [a.key]
+
+
+def _runner(dev):
     from aicc_agent.audio import EnergyVAD
     from aicc_agent.recorder import DualRecorder
     from aicc_agent.runner import CallRunner, RunnerConfig
-    from aicc_core.flow import Play
-
-    dev = AsyncTxDevice()
     r = CallRunner(None, dev, None, None, RunnerConfig())
     r.is_mock = False
     r.vad = EnergyVAD(300, 600)
     r._pending_utts, r.recorder, r.rx_speech_frames = [], DualRecorder(), 0
+    r.voice = VB()
+    return r
+
+
+def test_soft_or_short_sound_during_playback_is_not_barge_in():
+    from aicc_core.flow import Play
+    seen = []
+    for dev in (AsyncTxDevice(speech=(500, 1100), amp=500),   # 작은 소리(메아리 수준)
+                AsyncTxDevice(speech=(500, 760))):             # 큰 소리지만 0.26초
+        r = _runner(dev)
+        r._emit = lambda t, turn, p=None, event_id=None: seen.append(t) or "e"
+        r._on_utterance = lambda frames, t: seen.append("utt")
+
+        class F:
+            finished = False
+        r.flow = F()
+        r._play_async(Play("opening", 0), b"\x00" * 64000, [], 0)
+        assert dev.stopped_at is None and dev.t >= 3000  # 오프닝 끝까지 재생
+    assert "tx.barge_in" not in seen and "utt" not in seen  # 메아리를 답으로 처리하지 않음
+
+
+class _Flow:
+    finished = False
+
+
+def test_barge_in_during_file_playback_answers_current_question():
+    from aicc_core.flow import Play
+    dev = AsyncTxDevice()
+    r = _runner(dev)
+    r.flow = _Flow()
     seen = []
     r._emit = lambda t, turn, p=None, event_id=None: seen.append(t) or "e"
-    r._on_utterance = lambda frames, t: seen.append(("utt", len(frames)))
-
-    class F:
-        finished = False
-    r.flow = F()
     r._play_async(Play("ask_working", 1), b"\x00" * 64000, [], 0)
-    assert dev.stopped_at is not None and dev.stopped_at < 700  # 말하기 시작하자 곧바로 재생 중단
+    assert dev.stopped_at is not None and dev.stopped_at < 1000  # 0.4초 이상 이어지자 곧바로 재생 중단
     assert "tx.barge_in" in seen
-    # 끝나지 않은 발화는 대화 루프가 이어서 처리(재생 뒤로 밀려 다음 질문에 붙지 않음)
-    assert r.vad.in_speech
+    assert r.vad.in_speech  # 끝나지 않은 발화는 대화 루프가 이어서 처리(다음 질문에 붙지 않음)
 
 
 def test_no_barge_in_for_closing_plays_to_end():
-    from aicc_agent.audio import EnergyVAD
-    from aicc_agent.recorder import DualRecorder
-    from aicc_agent.runner import CallRunner, RunnerConfig
     from aicc_core.flow import Play
-
     dev = AsyncTxDevice(play_ms=2000)
-    r = CallRunner(None, dev, None, None, RunnerConfig())
-    r.is_mock = False
-    r.vad = EnergyVAD(300, 600)
-    r._pending_utts, r.recorder, r.rx_speech_frames = [], DualRecorder(), 0
+    r = _runner(dev)
+    r.flow = _Flow()
     r._emit = lambda *a, **k: "e"
     r._play_async(Play("closing", 1), b"\x00" * 64000, [], 0)
     assert dev.stopped_at is None and dev.t >= 2000

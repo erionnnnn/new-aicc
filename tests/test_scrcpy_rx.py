@@ -318,3 +318,23 @@ def test_dual_sim_uses_active_slot_not_idle_one():
     assert parse_call_state("mCallState=0\nmCallState=2\n").state == "UNKNOWN"  # OFFHOOK 만으론 응답 판정 불가
     both_idle_precise = DUAL_SIM_DIALING.replace("state: 4", "state: 0")
     assert parse_call_state(both_idle_precise).state == "DIALING"  # 한 슬롯이 OFFHOOK
+
+
+def test_gcar_preload_skips_push_at_play_time(tmp_path):
+    from aicc_agent.gcar_tx import GcarFileTx
+    jar = tmp_path / "u.jar"
+    jar.write_bytes(b"x")
+    adb = GcarAdb()
+    tx = GcarFileTx(adb, jar, workdir=tmp_path, extra_wait_s=1)
+    tx.start()
+    pcm = b"\x01\x00" * 16000
+    assert tx.preload("opening", pcm)
+    pushes = sum(1 for c in adb.calls if c[0] == "push")
+    tx.play_async(pcm, "opening")
+    assert sum(1 for c in adb.calls if c[0] == "push") == pushes  # 재생 때는 실행 명령만
+    assert f"goodcare-uplink-{tx.call_id}-opening.gcar" in adb.popens[-1][2]
+    while not tx.poll_playback(0.01):
+        pass
+    tx.play_async(pcm + b"\x00\x00", "opening")  # 내용이 다르면 새로 올림
+    assert sum(1 for c in adb.calls if c[0] == "push") == pushes + 1
+    tx.stop()

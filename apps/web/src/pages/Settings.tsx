@@ -147,11 +147,11 @@ function Voice({ me }: { me: Me }) {
           <table className="table compact">
             <thead><tr><th>키</th><th>문구</th><th>녹음</th><th /></tr></thead>
             <tbody>
-              {pack.required_keys.map((k: string) => {
+              {[...pack.required_keys, ...(pack.optional_keys ?? [])].map((k: string) => {
                 const c = pack.clips[k] ?? {};
                 return (
                   <tr key={k}>
-                    <td className="num">{k}</td>
+                    <td className="num">{k}{(pack.optional_keys ?? []).includes(k) && <div className="muted small">선택 · 말이 끝나면 바로 내는 맞장구</div>}</td>
                     <td>
                       {admin ? (
                         <form onSubmit={(e) => { e.preventDefault(); const t = new FormData(e.currentTarget).get("t") as string; run(() => api.put(`/api/v1/voice-packs/${pack.key}`, { texts: { [k]: t } })); }} className="inline-form">

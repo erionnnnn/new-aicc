@@ -124,6 +124,11 @@ class EnergyVAD:
                 self._buf = []
         return events
 
+    def reset(self) -> None:
+        self._in_speech = False
+        self._speech_ms = self._silence_ms = 0
+        self._buf = []
+
     @property
     def in_speech(self) -> bool:
         return self._in_speech

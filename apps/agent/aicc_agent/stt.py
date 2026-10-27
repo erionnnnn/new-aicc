@@ -52,7 +52,9 @@ class FasterWhisperSTT(STTAdapter):  # pragma: no cover - 선택 의존성, 실�
         # 기본 CPU: GPU 가 있어도 CUDA/cuDNN DLL 이 없으면 실패하므로 명시적으로 지정할 때만 GPU 사용
         device = device or os.environ.get("AICC_WHISPER_DEVICE", "cpu")
         self.model = WhisperModel(model or os.environ.get("AICC_WHISPER_MODEL", "small"), device=device,
-                                  compute_type=compute_type)  # 처음 실행 시 모델을 내려받는다(수백 MB)
+                                  compute_type=compute_type,
+                                  # PC 프로세서 코어를 모두 사용(기본값은 4개). 인식 시간 단축
+                                  cpu_threads=int(os.environ.get("AICC_WHISPER_THREADS") or (os.cpu_count() or 4)))  # 처음 실행 시 모델을 내려받는다(수백 MB)
         # 짧은 '아니요'를 '안녕'으로 적는 오인식(2026-10-27 실통화)을 줄이려고 통화에서 나올 말을 미리 알려 준다
         self.prompt = os.environ.get("AICC_STT_PROMPT", DEFAULT_PROMPT)
 

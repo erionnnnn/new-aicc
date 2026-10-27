@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import struct
 import subprocess
@@ -58,6 +59,8 @@ class GcarFileTx:
         self._stopped = False
         self._dur = 0.0
         self._deadline = 0.0
+        self._cur_stop: str | None = None
+        self._preloaded: dict[str, tuple[str, str, int]] = {}
 
     # ---- 경로 ----
     def _dev(self, suffix: str) -> str:
@@ -92,16 +95,46 @@ class GcarFileTx:
         while not self.poll_playback(wait_s=0.05):
             pass
 
+    # ---- 미리 올리기: 통화 연결 전(신호 가는 동안) 고정 안내를 휴대폰에 넣어 두면 재생 때 push 를 생략한다 ----
+    def preload(self, key: str, pcm: bytes) -> bool:
+        """30초 이하 고정 안내만 미리 올린다. 성공하면 True."""
+        if self.call_id is None or not pcm or len(pcm) > MAX_SECONDS * BYTES_PER_SEC:
+            return False
+        safe = "".join(ch for ch in key if ch.isalnum() or ch == "_")[:40]
+        gcar = self._dev(f"-{safe}.gcar")
+        self._push_gcar(pcm, gcar)
+        self._preloaded[key] = (hashlib.sha256(pcm).hexdigest(), gcar, len(pcm))
+        return True
+
+    def _push_gcar(self, pcm: bytes, gcar: str) -> None:
+        local = self.workdir / (gcar.rsplit("/", 1)[-1])
+        local.write_bytes(gcar_bytes(pcm))
+        try:
+            self.adb.run("push", str(local), gcar, timeout=30)
+        finally:
+            try:
+                local.unlink()
+            except OSError:
+                pass
+        for path in (gcar, gcar + ".stop"):
+            if path not in self._remote:
+                self._remote.append(path)
+
     # ---- 비동기 재생: 재생 중에도 러너가 상대 음성을 계속 듣고 끼어들기를 처리할 수 있게 한다 ----
-    def play_async(self, pcm: bytes) -> None:
+    def play_async(self, pcm: bytes, key: str | None = None) -> None:
         if self.call_id is None:
             raise DeviceError("송출 모듈이 준비되지 않았습니다")
-        self._queue = split_pcm(pcm)
         self._stopped = False
+        pre = self._preloaded.get(key) if key else None
+        if pre and pre[0] == hashlib.sha256(pcm).hexdigest():
+            self._queue = []
+            self._run(pre[1], pre[2])  # 이미 휴대폰에 있음: 실행 명령만
+            return
+        self._queue = split_pcm(pcm)
         self._start_part(self._queue.pop(0))
 
     def playing(self) -> bool:
-        return self._proc is not None or bool(getattr(self, "_queue", None))
+        return self._proc is not None or bool(self._queue)
 
     def poll_playback(self, wait_s: float = 0.0) -> bool:
         """재생이 모두 끝났으면 True. 모듈 오류는 DeviceError."""
@@ -117,29 +150,24 @@ class GcarFileTx:
         rc = self._proc.returncode
         self._proc = None
         self._finish(out, err, rc)
-        if getattr(self, "_queue", None) and not self._stopped:
+        if self._queue and not self._stopped:
             self._start_part(self._queue.pop(0))
             return False
         self._queue = []
         return True
 
     def _start_part(self, pcm: bytes) -> None:
-        local = self.workdir / f"goodcare-uplink-{self.call_id}.gcar"
-        local.write_bytes(gcar_bytes(pcm))
-        gcar, stop, jar = self._dev(".gcar"), self._dev(".gcar.stop"), self._dev(".jar")
-        try:
-            self.adb.run("push", str(local), gcar, timeout=30)
-        finally:
-            try:
-                local.unlink()
-            except OSError:
-                pass
-        if gcar not in self._remote:
-            self._remote += [gcar, stop]
+        gcar = self._dev(".gcar")
+        self._push_gcar(pcm, gcar)
+        self._run(gcar, len(pcm))
+
+    def _run(self, gcar: str, nbytes: int) -> None:
+        stop, jar = gcar + ".stop", self._dev(".jar")
         # 정리·권한·실행을 adb 한 번으로 묶어 송출 시작 지연을 줄인다(실행 명령 자체는 검증된 형식 그대로)
         cmd = ["shell", "-T", f"rm -f {stop}; chmod 600 {jar} {gcar}; CLASSPATH={jar} app_process / {MAIN_CLASS} "
                f"--play-file {gcar} {stop}"]
-        self._dur = len(pcm) / BYTES_PER_SEC
+        self._cur_stop = stop
+        self._dur = nbytes / BYTES_PER_SEC
         self._deadline = time.monotonic() + self._dur + self.extra_wait_s
         self._proc = self.adb.popen(*cmd)
 
@@ -161,7 +189,7 @@ class GcarFileTx:
         if self.call_id is None:
             return
         try:
-            self.adb.run("shell", f"touch {self._dev('.gcar.stop')}", timeout=10)
+            self.adb.run("shell", f"touch {self._cur_stop or self._dev('.gcar.stop')}", timeout=10)
         except DeviceError:
             pass
         if self._proc and self._proc.poll() is None:
@@ -182,6 +210,8 @@ class GcarFileTx:
                 except DeviceError:
                     pass
         self._remote = []
+        self._preloaded = {}
+        self._cur_stop = None
         self.call_id = None
 
 

@@ -29,13 +29,15 @@ from aicc_core.flow import (
 from aicc_core.voicepack import confirm_date_sequence
 
 from .ai import ExceptionAI
-from .audio import EnergyVAD, read_wav_mono16, split_frames, tone
+from .audio import EnergyVAD, read_wav_mono16, rms, split_frames, tone
 from .client import AgentClient, ApiError, new_event_id
-from .device import DeviceAdapter, DeviceError, Frame
+from .device import FRAME_MS, DeviceAdapter, DeviceError, Frame
 from .recorder import DualRecorder
 from .stt import STTAdapter
 
 log = logging.getLogger("aicc.agent")
+PRELOAD_KEYS = ("ack", "opening", "ask_working", "ask_end_date", "ask_available_date", "ask_repeat", "explain_role",
+                "callback", "refusal_ack", "closing", "ai_wait", "wrong_person")
 NO_BARGE_IN = {"refusal_ack", "closing", "wrong_person", "callback", "ai_failed"}
 
 
@@ -46,6 +48,9 @@ class RunnerConfig:
     poll_ms: int = 200
     listen_ms: int = 40           # 재생 중 상대 음성 확인 간격
     greeting_wait_ms: int = 1500  # 받자마자 '여보세요' 하는 동안 기다림
+    barge_threshold: float = 600.0  # 안내 재생 중에는 평소(300)보다 큰 소리만 상대 말로 본다(메아리·잡음 오인 방지)
+    barge_min_ms: int = 400         # 그 소리가 이만큼 이어져야 끼어들기로 인정
+    filler_min_speech_ms: int = 300 # 이보다 짧은 소리에는 '네,' 맞장구를 내지 않음
     real_vad_end_ms: int = 600    # 실통화: '네 통화 / 가능합니다' 처럼 숨 쉬는 사이에 문장이 쪼개지지 않게
     tx_chunk_ms: int = 200
     vad_end_ms: int = 350
@@ -89,6 +94,9 @@ class VoiceBank:
         self.cache[key] = pcm
         return pcm
 
+    def has(self, key: str) -> bool:
+        return bool(((self.manifest.get("clips") or {}).get(key) or {}).get("file"))
+
     def render(self, play: Play) -> list[str]:
         if play.key == "confirm_date":
             return confirm_date_sequence(int(play.params["month"]), int(play.params["day"]))
@@ -110,7 +118,8 @@ class CallRunner:
         eid = event_id or new_event_id()
         if type_ in ("call.answered", "call.not_answered", "call.answer_unknown", "play", "utterance.final",
                      "ai.start", "ai.failed", "schedule.confirmed", "schedule.confirm_rejected", "silence.timeout",
-                     "call.remote_hangup", "call.ended", "tx.barge_in", "call.greeting",
+                     "call.remote_hangup", "call.ended", "tx.barge_in", "call.greeting", "play.filler",
+                     "rx.ignored_during_tx",
                      "call.dial_not_started"):
             p = dict(payload or {})
             if "text" in p:
@@ -185,6 +194,7 @@ class CallRunner:
         self.flow.dialing()
         self._emit("call.dialing", 0, {"mock": self.is_mock})
         self.device.dial(phone)
+        self._preload_clips()
         t0 = self.device.now_ms()
         progressed = False  # 발신이 실제로 시작된 것(DIALING/ALERTING/OFFHOOK)을 한 번이라도 봤는지
         last_state = None
@@ -231,6 +241,22 @@ class CallRunner:
                 return
             self._tick(self.cfg.poll_ms, record=False)
         self._converse()
+
+    def _preload_clips(self) -> None:
+        """신호가 가는 동안 고정 안내를 휴대폰에 미리 올려 둔다(재생 시작 지연 단축). 실패해도 통화는 계속."""
+        if self.is_mock or not hasattr(self.device, "tx_preload"):
+            return
+        n = 0
+        for key in PRELOAD_KEYS:
+            if not self.voice.has(key):
+                continue
+            try:
+                n += bool(self.device.tx_preload(key, self.voice.pcm(key)))
+            except DeviceError as e:
+                log.warning("[통화 %s] 안내 미리 올리기 실패(%s): %s", self.call_id[:8], key, e)
+                break
+        if n:
+            log.info("[통화 %s] 안내 %d개 미리 올림", self.call_id[:8], n)
 
     def _wait_greeting(self) -> None:
         """받자마자 상대가 '여보세요'라고 하면 끝날 때까지 기다렸다가 안내를 시작한다(안내와 겹침 방지).
@@ -300,6 +326,7 @@ class CallRunner:
         return started
 
     def _on_utterance(self, frames: list[Frame], vad_end_ms: int) -> None:
+        self._filler(frames)
         res = self.stt.transcribe(frames)
         if not res.text.strip():
             return
@@ -394,40 +421,76 @@ class CallRunner:
     def _play_async(self, a: Play, pcm: bytes, frames: list[Frame], start: int) -> None:
         """파일 송출 방식: 재생을 시작해 두고, 끝날 때까지 상대 음성을 계속 듣는다.
 
-        재생 중 상대가 말하기 시작하면(끼어들기 허용 안내만) 즉시 재생을 멈추고, 그 발화는
-        지금 안내에 대한 답으로 처리한다. 예전처럼 재생이 끝난 뒤 몰아서 처리하면 답이 다음 질문에
-        붙는 문제가 있었다(2026-10-27 실통화 로그).
+        - 재생 중 '평소보다 큰 소리가 barge_min_ms 이상' 이어질 때만 끼어들기로 보고 즉시 멈춘다.
+          (우리 안내의 메아리·잡음으로 오프닝이 잘린 사례, 2026-10-27 2차 실통화)
+        - 끼어들기로 인정되지 않은 채 끝난 소리는 버린다(메아리를 상대 답으로 인식하지 않게).
+        - 끼어든 발화는 지금 안내에 대한 답으로 처리한다(재생 뒤로 밀려 다음 질문에 붙지 않게).
         """
-        self.device.tx_play_async(pcm)
+        self._wait_tx_idle()
+        keys = self.voice.render(a)
+        self.device.tx_play_async(pcm, keys[0] if len(keys) == 1 else None)
         barge_ok = self.cfg.barge_in and a.key not in NO_BARGE_IN
+        need = max(1, self.cfg.barge_min_ms // FRAME_MS)
+        loud_run = 0
         stopped_at: int | None = None
         while True:
             done = self.device.tx_poll()
             rx = self._tick(self.cfg.listen_ms)
-            if barge_ok:
-                for f in rx:
-                    evs = self.vad.feed(f)
-                    if f.pcm and f.speech:
-                        self.rx_speech_frames += 1
-                    for ev in evs:
-                        if ev.kind == "SPEECH_START" and stopped_at is None and not done:
-                            self.device.stop_tx()
-                            stopped_at = self.device.now_ms()
-                            self._emit("tx.barge_in", a.turn, {"after_ms": stopped_at - start})
-                        elif ev.kind == "SPEECH_END" and not self.flow.finished:
-                            self._pending_utts.append((ev.frames, ev.t_ms))
+            for f in rx:
+                evs = self.vad.feed(f)
+                if f.pcm and f.speech:
+                    self.rx_speech_frames += 1
+                if stopped_at is None:
+                    loud_run = loud_run + 1 if f.pcm and rms(f.pcm) >= self.cfg.barge_threshold else 0
+                    if barge_ok and not done and loud_run >= need:
+                        self.device.stop_tx()
+                        stopped_at = self.device.now_ms()
+                        self._emit("tx.barge_in", a.turn, {"after_ms": stopped_at - start})
+                for ev in evs:
+                    if ev.kind != "SPEECH_END" or self.flow.finished:
+                        continue
+                    if stopped_at is not None:
+                        self._pending_utts.append((ev.frames, ev.t_ms))
+                    else:
+                        self._emit("rx.ignored_during_tx", a.turn, {"ms": len(ev.frames) * FRAME_MS})
             if done or stopped_at is not None:
                 break
+        if stopped_at is None and self.vad.in_speech and loud_run == 0:
+            self.vad.reset()  # 재생 중 시작된 작은 소리(메아리)는 다음 답으로 넘기지 않는다
         end = stopped_at or self.device.now_ms()
         played = [f for f in frames if f.t_ms < end]
         self.recorder.add_tx(played)
         self._emit("tx.written", a.turn, {"frames": len(played), "remote_heard": "UNVERIFIED"})
         self.prompt_end_ms = self.device.now_ms()
-        # 재생 중 끝난 발화(짧은 대답)는 재생이 끝난 지금 처리한다
         utts, self._pending_utts = self._pending_utts, []
         for fr, t in utts:
             if not self.flow.finished:
                 self._on_utterance(fr, t)
+
+    def _wait_tx_idle(self) -> None:
+        """앞서 낸 '네,' 맞장구가 아직 재생 중이면 끝날 때까지 기다린다(보통 이미 끝나 있음)."""
+        t0 = time.monotonic()
+        while not self.device.tx_poll():
+            if time.monotonic() - t0 > 5:
+                self.device.stop_tx()
+                break
+            time.sleep(0.02)
+
+    def _filler(self, frames: list[Frame]) -> None:
+        """상대가 말을 마치면 인식(약 2초) 전에 짧은 '네,'를 바로 내보내 공백을 메운다. 녹음 'ack'가 있을 때만."""
+        if self.is_mock or not getattr(self.device, "tx_async", lambda: False)() or not self.voice.has("ack"):
+            return
+        voiced = sum(1 for f in frames if f.pcm and rms(f.pcm) >= self.cfg.vad_threshold) * FRAME_MS
+        if voiced < self.cfg.filler_min_speech_ms:
+            return
+        try:
+            self._wait_tx_idle()
+            pcm = self.voice.pcm("ack")
+            self.device.tx_play_async(pcm, "ack")
+            self.recorder.add_tx(split_frames(pcm, self.device.now_ms()))
+            self._emit("play.filler", self.flow.turn, {"key": "ack"})
+        except DeviceError as e:
+            log.warning("[통화 %s] 맞장구 재생 실패: %s", self.call_id[:8], e)
 
     def _ai(self, a: StartAI) -> None:
         self._emit("ai.start", a.turn, {"return_state": a.return_state})

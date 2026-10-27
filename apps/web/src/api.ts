@@ -70,7 +70,7 @@ export const CLIP_LABEL: Record<string, string> = {
   opening: "인사·통화 가능 확인", ask_working: "근무 여부 질문", ask_end_date: "종료일 질문",
   ask_available_date: "가능일 질문", confirm_date: "날짜 재확인", ask_repeat: "다시 말씀 요청",
   explain_role: "역할 안내", callback: "재연락 안내", refusal_ack: "연락거부 확인", closing: "마무리 인사",
-  ai_wait: "잠시만요", ai_failed: "AI 실패 안내", wrong_person: "잘못된 연결 사과",
+  ai_wait: "잠시만요", ai_failed: "AI 실패 안내", wrong_person: "잘못된 연결 사과", ack: "맞장구(네,)",
 };
 
 export function koDate(iso: string): string {

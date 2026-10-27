@@ -7,7 +7,15 @@ import os
 import re
 import wave
 
-from aicc_core.voicepack import DATE_PIECE_KEYS, REQUIRED_KEYS, check_pack, default_manifest, manifest_digest
+from aicc_core.voicepack import (
+    DATE_PIECE_KEYS,
+    OPTIONAL_KEYS,
+    REQUIRED_KEYS,
+    check_pack,
+    default_manifest,
+    manifest_digest,
+    with_optional,
+)
 from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
@@ -97,14 +105,15 @@ def put_settings(body: SettingsIn, p: Principal = Depends(current_user), db: Ses
 # ------------------ 음원팩 ------------------
 def _pack_out(db: Session, p: Principal, vp: VoicePack) -> dict:
     chk = check_pack(vp.manifest, services.packs_dir(p.org.id))
-    m = vp.manifest
+    m = with_optional(vp.manifest)
     return {"id": vp.id, "key": vp.pack_key, "version": vp.version, "digest": vp.digest,
             "speaker_name": m.get("speaker_name"), "gender": m.get("gender"), "company_name": m.get("company_name"),
             "approved_by": m.get("approved_by"), "dialable": chk.dialable, "problems": chk.problems,
             "missing_count": len(chk.missing),
             "clips": {k: {"text": c.get("text"), "has_file": bool(c.get("file")),
                           "duration_ms": c.get("duration_ms")} for k, c in m.get("clips", {}).items()},
-            "required_keys": list(REQUIRED_KEYS), "date_piece_keys": list(DATE_PIECE_KEYS)}
+            "required_keys": list(REQUIRED_KEYS), "optional_keys": list(OPTIONAL_KEYS),
+            "date_piece_keys": list(DATE_PIECE_KEYS)}
 
 
 @router.get("/voice-packs")
@@ -211,7 +220,7 @@ def generate_tts(key: str, body: TTSIn, p: Principal = Depends(current_user), db
     cur = services.latest_pack(db, p.org.id, key)
     if cur is None:
         raise AppError(404, "NOT_FOUND", "음원팩이 없습니다")
-    m = {**cur.manifest, "clips": {k: dict(v) for k, v in cur.manifest["clips"].items()}}
+    m = with_optional(cur.manifest)
     if not m.get("speaker_name"):
         raise AppError(422, "SPEAKER_REQUIRED", "안내 인물 이름을 먼저 저장하세요")
     made, failed = 0, []
@@ -257,7 +266,7 @@ def update_pack(key: str, body: PackPatch, p: Principal = Depends(current_user),
     cur = services.latest_pack(db, p.org.id, key)
     if cur is None:
         raise AppError(404, "NOT_FOUND", "음원팩이 없습니다")
-    m = {**cur.manifest, "clips": {k: dict(v) for k, v in cur.manifest["clips"].items()}}
+    m = with_optional(cur.manifest)
     if body.speaker_name is not None:
         m["speaker_name"] = body.speaker_name.strip()
     for k, t in body.texts.items():
@@ -279,11 +288,11 @@ async def upload_clip(key: str, clip: str, file: UploadFile = File(...), p: Prin
                       db: Session = Depends(get_db)) -> dict:
     require(p, "settings")
     cur = services.latest_pack(db, p.org.id, key)
-    if cur is None or clip not in cur.manifest.get("clips", {}):
+    if cur is None or clip not in with_optional(cur.manifest)["clips"]:
         raise AppError(404, "NOT_FOUND", "음원 키가 없습니다")
     data = await file.read(20 * 1024 * 1024)
     wav16k = _to_wav16k(data)
-    m = {**cur.manifest, "clips": {k: dict(v) for k, v in cur.manifest["clips"].items()}}
+    m = with_optional(cur.manifest)
     m["clips"][clip].update(_store_clip(p, key, clip, wav16k), source="upload")
     m["clips"][clip]["text"] = _apply_company(m["clips"][clip].get("text") or "", p.org.company_name.strip())
     m["approved_by"] = None

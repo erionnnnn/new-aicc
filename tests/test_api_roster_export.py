@@ -179,7 +179,7 @@ def test_voice_pack_auto_created_tts_and_approve(admin):
     r = admin.post("/api/v1/voice-packs/female/tts", json={"engine": "test"})
     assert r.status_code == 200, r.text
     out = r.json()
-    assert out["generated"] == 56 and out["missing_count"] == 0
+    assert out["generated"] == 57 and out["missing_count"] == 0
     assert "좋은케어" in out["clips"]["opening"]["text"] and "[회사명]" not in out["clips"]["opening"]["text"]
     assert out["problems"] == ["관리자 승인 기록이 없습니다"]
     ok = admin.post("/api/v1/voice-packs/female/approve").json()
