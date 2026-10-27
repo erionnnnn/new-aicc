@@ -54,7 +54,9 @@ def build_command(scrcpy: str, record_path: str, *, serial: str | None = None,
     if serial:
         cmd += ["-s", serial]
     cmd += [
-        "--no-window",            # 영상·제어 없이 오디오만
+        "--no-video",             # 영상 캡처 안 함(wav 기록은 오디오 스트림만 허용 — 실기기 오류로 확인)
+        "--no-control",
+        "--no-window",            # 창 없음
         "--no-playback",          # PC 스피커로 재생하지 않음
         f"--audio-source={source}",
         "--audio-codec=raw",

@@ -31,7 +31,7 @@ def stereo48k(ms, freq=300, amp=4000):
 
 def test_command_never_plays_on_pc_and_uses_downlink():
     cmd = build_command("scrcpy", "x.wav", serial="R58T")
-    assert "--no-playback" in cmd and "--no-window" in cmd
+    assert "--no-playback" in cmd and "--no-window" in cmd and "--no-video" in cmd
     assert "--audio-source=voice-call-downlink" in cmd and "--audio-codec=raw" in cmd
     assert cmd[1:3] == ["-s", "R58T"] and "--require-audio" in cmd
     with pytest.raises(ValueError):
