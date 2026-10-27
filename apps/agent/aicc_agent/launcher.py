@@ -124,6 +124,32 @@ def supervise_agent(env_file: Path, base: str, stop: threading.Event) -> None:  
     agent_stop.set()
 
 
+def _rebuild_web_if_stale() -> None:  # pragma: no cover - npm 실행
+    """git pull 로 화면 소스가 바뀌었는데 빌드가 예전 것이면 다시 빌드한다(예전 화면이 보이는 문제 방지)."""
+    import shutil
+    import subprocess
+    from .scrcpy_rx import REPO_ROOT
+    web = REPO_ROOT / "apps" / "web"
+    index = web / "dist" / "index.html"
+    if not (web / "src").is_dir():
+        return
+    newest = max((f.stat().st_mtime for f in (web / "src").rglob("*") if f.is_file()), default=0)
+    if index.is_file() and index.stat().st_mtime >= newest:
+        return
+    npm = shutil.which("npm") or shutil.which("npm.cmd")
+    if not npm:
+        log.warning("화면 소스가 바뀌었지만 npm 이 없어 다시 빌드하지 못했습니다(setup.bat 실행 필요)")
+        return
+    print("화면을 새 버전으로 빌드하는 중입니다(1분 이내)…")
+    try:
+        if not (web / "node_modules").is_dir():
+            subprocess.run([npm, "ci"], cwd=web, check=True, timeout=600)
+        subprocess.run([npm, "run", "build"], cwd=web, check=True, timeout=600)
+        log.info("화면 빌드 완료")
+    except Exception as e:  # noqa: BLE001
+        log.warning("화면 빌드 실패: %s (setup.bat 을 실행하세요)", e)
+
+
 def _pause(msg: str) -> None:  # pragma: no cover
     """바탕화면 아이콘으로 실행했을 때 창이 바로 닫혀 원인을 못 보는 일을 막는다."""
     try:
@@ -174,6 +200,7 @@ def _run(argv: list[str] | None = None) -> int:  # pragma: no cover - 프로세�
             webbrowser.open(url)
         return 0
     os.environ.setdefault("AICC_LOCAL_AGENT", "1")
+    _rebuild_web_if_stale()
     import uvicorn
     from aicc_api.config import get_settings
     from aicc_api.main import create_app
