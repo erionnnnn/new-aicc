@@ -103,7 +103,7 @@ function Voice({ me }: { me: Me }) {
     setErr(null); setTtsMsg(""); setBusy(true);
     try {
       const r = await api.upload(`/api/v1/voice-packs/${pack.key}/import-legacy`, f);
-      setTtsMsg(`완료: 기존 녹음 ${r.imported.length}개를 배정했습니다. 녹음 없는 칸 ${r.missing_count}개는 아래 ‘빈칸만 Gemini 목소리로 채우기’로 만드세요.`);
+      setTtsMsg(`완료: 녹음 ${r.imported.length}개를 배정했습니다.${r.bad_files?.length ? ` 읽지 못한 파일 ${r.bad_files.length}개: ${r.bad_files.slice(0, 5).join(", ")}.` : ""} 녹음 없는 칸 ${r.missing_count}개는 아래 ‘빈칸만 Gemini 목소리로 채우기’로 만드세요.`);
       packs.reload();
     } catch (e) { setErr(e as ApiError); } finally { setBusy(false); }
   }

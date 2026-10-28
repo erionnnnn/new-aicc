@@ -282,10 +282,12 @@ def test_import_script_named_recordings(admin):
         z.writestr("새녹음/001_opening.wav", _wav([(500, 6000)]))
         z.writestr("새녹음/045_month_10.wav", _wav([(300, 6000)]))
         z.writestr("새녹음/080_sc_ask_pay.wav", _wav([(500, 6000)]))
+        z.writestr("새녹음/081_closing.flac", b"not-audio")  # 깨진 파일은 건너뛰고 bad_files 로 알림
         z.writestr("새녹음/001_opening_MALE.wav", _wav([(500, 6000)]))
     r = admin.c.post("/api/v1/voice-packs/female/import-legacy", files={"file": ("rec.zip", buf.getvalue())},
                      headers=admin._h())
     assert r.status_code == 200, r.text
     out = r.json()
     assert {"opening", "month_10", "sc_ask_pay"} <= set(out["imported"])
+    assert out["bad_files"] == ["081_closing.flac"] and "closing" not in out["imported"]
     assert out["clips"]["opening"]["has_file"] and out["clips"]["opening"]["text"].startswith("안녕하세요, 선생님")

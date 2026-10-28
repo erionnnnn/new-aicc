@@ -359,9 +359,9 @@ async def import_legacy(key: str, file: UploadFile = File(...), p: Principal = D
     files: dict[str, str] = {}
     for info in zf.infolist():
         name = info.filename.replace("\\", "/").rsplit("/", 1)[-1]
-        if info.is_dir() or not name.lower().endswith(".wav") or info.file_size > 20 * 1024 * 1024:
+        if info.is_dir() or not name.lower().endswith((".wav", ".mp3", ".flac")) or info.file_size > 20 * 1024 * 1024:
             continue
-        stem = name[:-4].upper()
+        stem = name.rsplit(".", 1)[0].upper()
         if suffix and not stem.endswith(suffix):
             continue
         if not suffix and stem.endswith("_MALE"):
@@ -371,6 +371,7 @@ async def import_legacy(key: str, file: UploadFile = File(...), p: Principal = D
         raise AppError(422, "ZIP_EMPTY", "zip 안에 이 목소리용 WAV 가 없습니다(여성: OPENING.wav, 남성: OPENING_MALE.wav 형식)")
     m = with_optional(cur.manifest)
     imported, missing, regen = [], [], []
+    bad_files: list[str] = []
     # 새 녹음(대본표 파일명 '001_opening.wav', '045_month_10.wav' …): 칸 이름으로 바로 배정, 지금 문구로 표시
     from aicc_core.scenarios import CURRENT_TEXTS
     from aicc_core.voicepack import DEFAULT_SCRIPTS
@@ -383,7 +384,12 @@ async def import_legacy(key: str, file: UploadFile = File(...), p: Principal = D
             continue
         text = CURRENT_TEXTS.get(clip) or m["clips"][clip].get("text") or DEFAULT_SCRIPTS.get(clip, "")
         text = _apply_company(text, p.org.company_name.strip())
-        m["clips"][clip].update(_store_clip(p, key, clip, _to_wav16k(zf.read(fname))), text=text, source="recorded:script")
+        try:
+            wav = _to_wav16k(zf.read(fname))
+        except AppError:
+            bad_files.append(fname.rsplit("/", 1)[-1])  # 깨진 파일은 건너뛰고 알려 준다
+            continue
+        m["clips"][clip].update(_store_clip(p, key, clip, wav), text=text, source="recorded:script")
         imported.append(clip)
     newly = set(imported)
     plan = [(clip, code, text) for clip, (code, text) in LEGACY_MAP.items()]
@@ -416,7 +422,8 @@ async def import_legacy(key: str, file: UploadFile = File(...), p: Principal = D
     audit(db, p, "voicepack.import_legacy", "voice_pack", vp.id, {"key": key, "imported": len(imported),
                                                                   "missing": missing})
     db.commit()
-    return {**_pack_out(db, p, vp), "imported": imported, "missing_legacy": missing, "regenerate": regen}
+    return {**_pack_out(db, p, vp), "imported": imported, "missing_legacy": missing, "regenerate": regen,
+            "bad_files": bad_files}
 
 
 @router.post("/voice-packs/{key}/refresh-texts")
