@@ -88,10 +88,10 @@ function Voice({ me }: { me: Me }) {
       for (;;) {
         const r = await api.post(`/api/v1/voice-packs/${pack.key}/tts`,
           { engine, only_missing: !unify && (onlyMissing || engine === "gemini" || engine === "gemini-live"), unify,
-            max_items: engine === "gemini" ? 6 : engine === "gemini-live" ? 5 : engine === "voicestudio" ? 2 : 0 });
+            max_items: engine === "gemini" ? 6 : engine === "gemini-live" ? 5 : engine === "melo" ? 20 : engine === "voicestudio" ? 2 : 0 });
         made += r.generated; failed.push(...r.failed);
         packs.reload();
-        if (!["gemini", "gemini-live", "voicestudio"].includes(engine) || !r.remaining || r.generated === 0) break;
+        if (!["gemini", "gemini-live", "voicestudio", "melo"].includes(engine) || !r.remaining || r.generated === 0) break;
         setTtsMsg(`진행 중: ${made}개 생성, 남은 ${r.remaining}개…`);
       }
       setTtsMsg(failed.length ? `일부 실패: ${made}개 생성, ${failed.length}개 실패(${failed[0].error})` : `완료: ${made}개 생성. 들어 보고 승인하세요.`);
@@ -141,6 +141,24 @@ function Voice({ me }: { me: Me }) {
           <p className="muted small">‘김태희 실장’은 업무상 안내 역할 이름입니다. 특정 인물의 목소리를 흉내 내지 않고 승인된 녹음만 사용합니다. 녹음 파일은 WAV·MP3·FLAC 을 올리면 자동 변환됩니다.</p>
           {admin && (
             <div className="panel tts-box">
+              <h3>MeloTTS로 만들기(이 PC CPU · 무료 · 인터넷 불필요)</h3>
+              {pack.key === "female" ? (
+                <>
+                  <p className="muted small">이 PC에서 한국어 음성을 만들어 저장합니다(원본 24kHz 모노 16비트 보관, 통화에는 16kHz로 송출). 처음 한 번 <b>setup_melo.bat</b> 으로 설치한 뒤 AICC를 다시 켜면 음성 서버가 함께 켜집니다.
+                    이 엔진으로 만들면 통화 중 AI 답도 같은 MeloTTS 목소리로 읽습니다. 20개씩 나눠 만들며, 멈추면 다시 누르면 이어서 합니다.</p>
+                  <div className="toolbar">
+                    <button className="btn primary" disabled={busy} onClick={() => tts("melo", false, true)}>
+                      {busy ? "만드는 중…" : "MeloTTS로 전체 만들기(목소리 통일)"}
+                    </button>
+                    <button className="btn" disabled={busy} onClick={() => tts("melo", true)}>{busy ? "만드는 중…" : "빈칸만 MeloTTS로 채우기"}</button>
+                    <button className="btn ghost" disabled={busy} onClick={() => run(async () => {
+                      const r = await api.get<any>("/api/v1/melo/status");
+                      setTtsMsg(r.ready ? `완료: MeloTTS 연결됨(${r.url}) · 속도 ${r.speed}` : r.running ? "MeloTTS 가 켜지는 중입니다(모델 준비). 잠시 뒤 다시 확인하세요."
+                        : `MeloTTS 에 연결되지 않습니다(${r.url}). setup_melo.bat 설치 후 AICC 를 다시 켜세요.`);
+                    })}>연결 확인</button>
+                  </div>
+                </>
+              ) : <p className="muted small">MeloTTS 한국어는 목소리가 1개(여성)라 여성 음원팩에서만 씁니다.</p>}
               <h3>ARS 음성 저장(기존 프로그램 v11.49 방식 · Gemini Live)</h3>
               <p className="muted small">통화 중 AI와 같은 Gemini Live 목소리({pack.key === "female" ? "Aoede" : "Charon"})로 고정 안내 문구를 한 번씩 읽혀 저장합니다.
                 이미 저장된 음원은 다시 만들지 않고, 문장마다 20초 안에 못 만들면 건너뛰고 계속합니다. 모델이 읽은 문장을 받아써서 원문과 다르게 읽은 음원은 저장하지 않습니다.

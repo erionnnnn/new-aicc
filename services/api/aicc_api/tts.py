@@ -5,6 +5,8 @@
 - gemini: 기존 녹음과 같은 Gemini 목소리(여성 Aoede, 남성 Charon). 이 PC 의 Gemini 키 사용, 인터넷 필요.
 - edge: Microsoft Edge 온라인 신경망 음성(edge-tts) + miniaudio 로 16kHz 모노 WAV 변환. 인터넷 필요.
   여성 ko-KR-SunHiNeural, 남성 ko-KR-InJoonNeural. 특정 인물 목소리가 아닌 일반 합성 음성이다.
+- melo: 이 PC 의 MeloTTS(CPU, MIT). 한국어 목소리 1개 → 여성 음원팩 전용. 24kHz 원본도 보관.
+- gemini-live: Gemini Live 목소리로 고정 멘트 저장(기존 프로그램 v11.49 방식).
 - sapi: Windows 내장 음성(System.Speech, 예: Microsoft Heami). 인터넷 불필요, 음질은 낮다.
 
 생성한 음원도 관리자가 듣고 '승인'해야 실통화에 쓸 수 있다(설계 03: 승인된 음원만 사용).
@@ -129,6 +131,8 @@ def voice_tag(pack_key: str, engine: str = "gemini") -> str:
         c = vs_config(pack_key)
         # ':profile' — 저장된 프로필로만 만든 음원(그 전 무작위 목소리 음원은 '전체 만들기'에서 다시 만듦)
         return f"tts:voicestudio:{c['model']}:{c['voice']}:{TTS_REV}:profile"
+    if engine == "melo":
+        return f"tts:melo:KR:{melo_config()['speed']}:{TTS_REV}"
     if engine == "gemini-live":
         return f"tts:gemini-live:{pinned_live_model() or '?'}:{GEMINI_VOICES.get(pack_key, 'Aoede')}:{TTS_REV}"
     return f"tts:gemini:{pinned_model() or '?'}:{GEMINI_VOICES.get(pack_key, 'Aoede')}:{TTS_REV}"
@@ -377,6 +381,91 @@ def normalize_wav(wav16k: bytes, target_dbfs: float = -20.0, peak_dbfs: float = 
     return buf.getvalue()
 
 
+# ---------------- MeloTTS(이 PC 의 CPU, 무료·MIT) ----------------
+# scripts/melo_server.py 를 별도 환경(.venv-melo)에서 띄우고 http 로 부른다. 한국어 목소리는 1개(KR) →
+# 여성 음원팩 전용(2026-10-28 사용자 결정: 여성 한 목소리만). 원본은 24kHz 모노 16bit 로 받아 보관하고,
+# 통화용은 16kHz 로 바꾼다(휴대폰 송출 경로가 16kHz).
+MELO_RATE = 24000
+
+
+def melo_config() -> dict:
+    import os
+    env = {}
+    try:
+        from .routers.admin import _read_agent_env
+        env = _read_agent_env()
+    except Exception:  # noqa: BLE001
+        pass
+    g = lambda k, d="": (env.get(k) or os.environ.get(k) or d).strip()  # noqa: E731
+    try:
+        speed = float(g("AICC_MELO_SPEED", "1.0"))
+    except ValueError:
+        speed = 1.0
+    return {"url": g("AICC_MELO_URL", "http://127.0.0.1:3910").rstrip("/"), "speed": speed}
+
+
+def melo_status() -> dict:
+    import httpx
+    c = melo_config()
+    try:
+        r = httpx.get(f"{c['url']}/health", timeout=5)
+        j = r.json()
+        return {"running": True, "ready": bool(j.get("ok")), "url": c["url"], "speakers": j.get("speakers", []),
+                "speed": c["speed"]}
+    except Exception as e:  # noqa: BLE001
+        return {"running": False, "ready": False, "url": c["url"], "error": type(e).__name__, "speed": c["speed"]}
+
+
+def synth_melo24(text: str, pack_key: str) -> bytes:
+    """MeloTTS 원본(24kHz 모노 16bit WAV, 음량 맞춤)."""
+    import httpx
+    if pack_key != "female":
+        raise TTSError("MeloTTS 한국어는 목소리가 1개(여성)뿐이라 여성 음원팩에만 씁니다. 남성 음원팩은 다른 엔진을 쓰세요.")
+    c = melo_config()
+    try:
+        r = httpx.post(f"{c['url']}/tts", json={"text": text, "speed": c["speed"]}, timeout=120)
+    except httpx.TimeoutException:
+        raise TTSError("MeloTTS 응답 시간 초과(120초). PC 가 바쁘거나 모델을 처음 내려받는 중일 수 있습니다.") from None
+    except httpx.HTTPError:
+        raise TTSError(f"MeloTTS 에 연결되지 않습니다({c['url']}). AICC 를 다시 켜거나 setup_melo 설치를 확인하세요.") from None
+    if r.status_code != 200:
+        try:
+            msg = r.json().get("error", "")
+        except Exception:  # noqa: BLE001
+            msg = r.text[:200]
+        raise TTSError(f"MeloTTS 오류: {msg}")
+    data = r.content
+    try:
+        with wave.open(io.BytesIO(data)) as w:
+            if w.getnchannels() != 1 or w.getsampwidth() != 2 or w.getframerate() != MELO_RATE:
+                raise TTSError("MeloTTS 음성 형식이 24kHz 모노 16bit 가 아닙니다")
+            if w.getnframes() < MELO_RATE // 10:
+                raise TTSError("MeloTTS 가 빈 음성을 돌려줬습니다")
+    except wave.Error:
+        raise TTSError("MeloTTS 응답이 WAV 가 아닙니다") from None
+    return normalize_wav(data)
+
+
+def to16k(wav: bytes) -> bytes:
+    """아무 샘플레이트 모노 16bit WAV → 16kHz(통화 송출용). miniaudio 가 있으면 그것으로(고품질), 없으면 선형."""
+    with wave.open(io.BytesIO(wav)) as w:
+        rate, pcm = w.getframerate(), w.readframes(w.getnframes())
+    if rate == TARGET_RATE:
+        return wav
+    try:
+        import miniaudio
+        snd = miniaudio.decode(wav, output_format=miniaudio.SampleFormat.SIGNED16, nchannels=1,
+                               sample_rate=TARGET_RATE)
+        return _wav16k(snd.samples.tobytes())
+    except Exception:  # noqa: BLE001
+        from aicc_agent.audio import resample_linear
+        return _wav16k(resample_linear(pcm, rate, TARGET_RATE))
+
+
+def synth_melo(text: str, pack_key: str) -> bytes:
+    return normalize_wav(to16k(synth_melo24(text, pack_key)))
+
+
 # ---------------- Gemini Live 로 고정 멘트 저장(기존 프로그램 v11.49 'ARS 음성 저장' 방식) ----------------
 # v11.49: 고정 멘트를 통화 중 AI 와 '같은 Live 모델·같은 목소리'로 한 번 읽혀 WAV 로 저장하고, 이후 통화는 WAV 만 재생.
 # 문장마다 따로 연결 + 20초 제한, 실패한 문장은 건너뛰고 계속, 이미 있는 음원은 다시 만들지 않음.
@@ -502,6 +591,8 @@ def synthesize(engine: str, text: str, pack_key: str, *, api_key: str | None = N
         return synth_gemini(text, pack_key, api_key, model)
     if engine == "gemini-live":
         return synth_gemini_live(text, pack_key, api_key, model)
+    if engine == "melo":
+        return synth_melo(text, pack_key)
     if engine == "voicestudio":
         return synth_voicestudio(text, pack_key)
     if engine == "edge":

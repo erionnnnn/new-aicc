@@ -165,7 +165,7 @@ def _apply_company(text: str, company: str) -> str:
     return text.replace("[회사명]", company) if company else text
 
 
-def _store_clip(p: Principal, key: str, clip: str, wav16k: bytes) -> dict:
+def _store_clip(p: Principal, key: str, clip: str, wav16k: bytes, master: bytes | None = None) -> dict:
     import hashlib
 
     from ..tts import normalize_wav
@@ -177,7 +177,16 @@ def _store_clip(p: Principal, key: str, clip: str, wav16k: bytes) -> dict:
     path.write_bytes(wav16k)
     with wave.open(io.BytesIO(wav16k)) as w:
         dur = int(w.getnframes() * 1000 / w.getframerate())
-    return {"file": fname, "duration_ms": dur, "sample_rate": 16000, "sha256": h}
+    out = {"file": fname, "duration_ms": dur, "sample_rate": 16000, "sha256": h, "master_file": None}
+    if master:  # 원본(예: MeloTTS 24kHz) 보관 — 통화에는 16kHz 파일을 쓴다
+        with wave.open(io.BytesIO(master)) as w:
+            mrate = w.getframerate()
+        mname = f"{key}/master/{clip}-{h}-{mrate // 1000}k.wav"
+        mpath = services.packs_dir(p.org.id) / mname
+        mpath.parent.mkdir(parents=True, exist_ok=True)
+        mpath.write_bytes(master)
+        out.update(master_file=mname, master_rate=mrate)
+    return out
 
 
 def _to_wav16k(data: bytes) -> bytes:
@@ -206,10 +215,19 @@ def _to_wav16k(data: bytes) -> bytes:
 
 
 class TTSIn(BaseModel):
-    engine: str = Field(default="edge", pattern="^(voicestudio|gemini|gemini-live|edge|sapi|test)$")
+    engine: str = Field(default="edge", pattern="^(voicestudio|gemini|gemini-live|melo|edge|sapi|test)$")
     only_missing: bool = False
     max_items: int = Field(default=0, ge=0, le=200)  # 0 = 전부. Gemini 는 분당 한도가 있어 화면이 나눠 요청한다
     unify: bool = False  # 목소리 통일: 같은 모델·목소리·말투로 만든 것이 아닌 모든 칸(기존 녹음 포함)을 다시 만든다
+
+
+@router.get("/melo/status")
+def melo_status(p: Principal = Depends(current_user)) -> dict:
+    """MeloTTS 로컬 서버가 켜져 있는지(설정 화면 확인용)."""
+    from .. import tts
+
+    require(p, "settings")
+    return tts.melo_status()
 
 
 @router.get("/voicestudio/status")
@@ -255,7 +273,7 @@ def generate_tts(key: str, body: TTSIn, p: Principal = Depends(current_user), db
         raise AppError(422, "SPEAKER_REQUIRED", "안내 인물 이름을 먼저 저장하세요")
     made, failed = 0, []
     env = _read_agent_env() if body.engine in ("gemini", "gemini-live") else {}
-    voiced = ("gemini", "gemini-live", "voicestudio")  # 출처 표시로 목소리 통일 여부를 판단하는 엔진
+    voiced = ("gemini", "gemini-live", "voicestudio", "melo")  # 출처 표시로 목소리 통일 여부를 판단하는 엔진
     remaining = 0
     for clip, c in m["clips"].items():
         if body.unify:
@@ -270,8 +288,13 @@ def generate_tts(key: str, body: TTSIn, p: Principal = Depends(current_user), db
         if not text.strip():
             failed.append({"clip": clip, "error": "문구 없음"})
             continue
+        master = None
         try:
-            wav16k = tts.synthesize(body.engine, text, key, api_key=env.get("GEMINI_API_KEY") or None)
+            if body.engine == "melo":
+                master = tts.synth_melo24(text, key)  # 24kHz 원본 보관 + 통화용 16kHz
+                wav16k = tts.to16k(master)
+            else:
+                wav16k = tts.synthesize(body.engine, text, key, api_key=env.get("GEMINI_API_KEY") or None)
         except tts.TTSError as e:
             failed.append({"clip": clip, "error": str(e)})
             # 처음부터 실패하면 같은 원인(키·모델)이므로 중단. Live 저장은 v11.49 처럼 문장별 실패를 건너뛰고 계속하되,
@@ -279,7 +302,7 @@ def generate_tts(key: str, body: TTSIn, p: Principal = Depends(current_user), db
             if made == 0 and (body.engine != "gemini-live" or len(failed) >= 3):
                 break
             continue
-        c.update(_store_clip(p, key, clip, wav16k), text=text,
+        c.update(_store_clip(p, key, clip, wav16k, master=master), text=text,
                  source=tts.voice_tag(key, body.engine) if body.engine in voiced else f"tts:{body.engine}")
         made += 1
     if made:

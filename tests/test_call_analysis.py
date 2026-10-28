@@ -101,3 +101,101 @@ def test_live_read_match_and_tag():
     assert tts.read_match("", "아무거나") == 0.0
     assert tts.voice_tag("female", "gemini-live").startswith("tts:gemini-live:")
     assert tts.voice_tag("male", "gemini-live").split(":")[3] == "Charon"
+
+
+def _fake_melo_server(wav_rate=24000):
+    import io
+    import math
+    import struct
+    import threading
+    import wave
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    class H(BaseHTTPRequestHandler):
+        def do_POST(self):
+            n = int(self.headers["Content-Length"])
+            req = json.loads(self.rfile.read(n))
+            assert req["text"]
+            frames = wav_rate // 2
+            pcm = struct.pack(f"<{frames}h", *(int(8000 * math.sin(2 * math.pi * 220 * i / wav_rate))
+                                                for i in range(frames)))
+            buf = io.BytesIO()
+            with wave.open(buf, "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(wav_rate)
+                w.writeframes(pcm)
+            body = buf.getvalue()
+            self.send_response(200)
+            self.send_header("Content-Type", "audio/wav")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_GET(self):
+            body = b'{"ok": true, "speakers": ["KR"]}'
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv
+
+
+def test_melo_engine_stores_24k_master_and_16k_clip(admin, monkeypatch):
+    import io
+    import wave
+
+    from aicc_api import tts
+    srv = _fake_melo_server()
+    monkeypatch.setenv("AICC_MELO_URL", f"http://127.0.0.1:{srv.server_address[1]}")
+    try:
+        st = admin.get("/api/v1/melo/status").json()
+        assert st["ready"] is True
+        admin.put("/api/v1/settings", json={"company_name": "좋은간병"})
+        packs = admin.post("/api/v1/voice-packs/init").json()
+        assert any(p["key"] == "female" for p in packs)
+        admin.put("/api/v1/voice-packs/female", json={"speaker_name": "김태희"})
+        r = admin.post("/api/v1/voice-packs/female/tts", json={"engine": "melo", "max_items": 3, "unify": True})
+        assert r.status_code == 200, r.text
+        out = r.json()
+        assert out["generated"] == 3 and not out["failed"]
+        import os
+        import pathlib
+        data = pathlib.Path(os.environ["AICC_DATA_DIR"])
+        masters = list(data.rglob("female/master/*-24k.wav"))
+        assert len(masters) == 3
+        with wave.open(str(masters[0])) as w:
+            assert w.getframerate() == 24000 and w.getnchannels() == 1 and w.getsampwidth() == 2
+        calls16 = [f for f in data.rglob("female/*.wav") if "master" not in f.parts]
+        assert calls16
+        with wave.open(str(calls16[0])) as w:
+            assert w.getframerate() == 16000
+        # 남성 음원팩은 거절(목소리 1개)
+        admin.put("/api/v1/voice-packs/male", json={"speaker_name": "이실장"})
+        r2 = admin.post("/api/v1/voice-packs/male/tts", json={"engine": "melo", "max_items": 1})
+        assert r2.status_code == 502 and "여성" in r2.text
+        # 변환: 24k → 16k
+        w24 = tts.synth_melo24("안녕하세요", "female")
+        with wave.open(io.BytesIO(w24)) as w:
+            assert w.getframerate() == 24000
+        with wave.open(io.BytesIO(tts.to16k(w24))) as w:
+            assert w.getframerate() == 16000 and 7800 <= w.getnframes() <= 8200
+    finally:
+        srv.shutdown()
+
+
+def test_melo_server_patches_import_without_melo():
+    import importlib.util
+    import pathlib
+    spec = importlib.util.spec_from_file_location("melo_server", pathlib.Path("scripts/melo_server.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    mod._patch_g2pkk()  # 패키지가 없어도 오류 없이 넘어가야 함
+    mod._patch_mecab_ja()
+    assert mod.OUT_RATE == 24000

@@ -9,6 +9,7 @@ probe_state.json
 
 # 빌드·환경
 .venv/
+.venv-melo/
 __pycache__/
 *.pyc
 .pytest_cache/

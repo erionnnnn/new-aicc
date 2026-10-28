@@ -163,6 +163,27 @@ def _rebuild_web_if_stale() -> None:  # pragma: no cover - npm 실행
         log.warning("화면 빌드 실패: %s (setup.bat 을 실행하세요)", e)
 
 
+def _start_melo(data_dir: Path):  # noqa: ANN202  # pragma: no cover - 프로세스 실행
+    """MeloTTS 로컬 음성 서버(.venv-melo 가 설치돼 있을 때만). 이미 떠 있으면 그대로 쓴다."""
+    import subprocess
+    import sys
+    root = Path.cwd()
+    py = root / ".venv-melo" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
+    script = root / "scripts" / "melo_server.py"
+    port = int(os.environ.get("AICC_MELO_PORT", "3910"))
+    if not py.exists() or not script.exists() or os.environ.get("AICC_MELO", "1") == "0":
+        return None
+    if _port_open("127.0.0.1", port):
+        log.info("MeloTTS 음성 서버가 이미 실행 중입니다(포트 %d)", port)
+        return None
+    logf = open(data_dir / "melo.log", "a", encoding="utf-8")  # noqa: SIM115
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    proc = subprocess.Popen([str(py), str(script), "--port", str(port)], cwd=str(root), stdout=logf,
+                            stderr=subprocess.STDOUT, creationflags=flags)
+    log.info("MeloTTS 음성 서버 시작(포트 %d, 모델 준비에 수십 초 걸릴 수 있음) — 기록: %s", port, data_dir / "melo.log")
+    return proc
+
+
 def _pause(msg: str) -> None:  # pragma: no cover
     """바탕화면 아이콘으로 실행했을 때 창이 바로 닫혀 원인을 못 보는 일을 막는다."""
     try:
@@ -230,6 +251,7 @@ def _run(argv: list[str] | None = None) -> int:  # pragma: no cover - 프로세�
         time.sleep(0.1)
     if not _port_open("127.0.0.1", a.port):
         raise RuntimeError(f"서버가 시작되지 않았습니다. 기록 파일을 확인하세요: {(data_dir / 'aicc.log').resolve()}")
+    melo = _start_melo(data_dir)
     stop = threading.Event()
     threading.Thread(target=supervise_agent, args=(s.data_dir / "agent.env", url, stop), daemon=True).start()
     print(f"\nAICC 관리화면: {url}\n데이터 위치: {s.data_dir}\n종료하려면 이 창에서 Ctrl+C\n")
@@ -242,6 +264,8 @@ def _run(argv: list[str] | None = None) -> int:  # pragma: no cover - 프로세�
         pass
     stop.set()
     server.should_exit = True
+    if melo is not None:
+        melo.terminate()
     return 0
 
 
