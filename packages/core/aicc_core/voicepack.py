@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import calendar as _cal
 import hashlib
 import json
 from dataclasses import dataclass
@@ -23,8 +24,6 @@ REQUIRED_KEYS = (
 # 선택 음원: 없어도 실통화 가능.
 # - ack: 상대가 말을 마치면 인식 전에 바로 내는 짧은 맞장구("네,")
 # - sc_*: 기존 녹음 상황 응답(급여·병원 질문, 선호 조건, 운전 중 등 — scenarios.py)
-import calendar as _cal
-
 # 날짜 문장 통째 녹음(통화 중 생성·추정 없이 미리 녹음한 고정 문장, 2026-10-28 사용자 요청 '최대한 많은 스크립트')
 #  - confirm_MM_DD : "10월 28일부터 근무 가능하신 게 맞으실까요?"  → 있으면 조각 이어 붙이기 대신 사용
 #  - endack_MM_DD  : "11월 8일까지 근무하시는군요. 그다음에는 언제부터 근무 가능하실까요?"
