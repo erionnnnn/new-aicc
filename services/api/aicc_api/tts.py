@@ -134,7 +134,9 @@ def voice_tag(pack_key: str, engine: str = "gemini") -> str:
 
 # ---------------- VoiceStudio(이 PC 에 설치한 무료 로컬 음성 프로그램) ----------------
 # OpenAI 호환 주소 POST {url}/v1/audio/speech (VoiceStudio backend/api/routers/openai_compat.py, 2026-10-28 확인)
-# 모델 라이선스(예: OmniVoice 가중치 CC-BY-NC)는 회사가 판단한다 — 2026-10-28 사용자: 담당자와 협의 완료, OmniVoice 사용.
+# 모델 라이선스는 회사가 판단한다(2026-10-28 사용자: 담당자 협의 완료).
+# 기본 모델 moss-tts-nano(사용자 선택 2026-10-28): 한국어·CPU 실시간·Apache-2.0, 참조 녹음 복제만 지원 →
+# VoiceStudio 에 '참조 녹음이 있는 목소리 프로필'이 있어야 같은 목소리가 나온다.
 def vs_config(pack_key: str = "female") -> dict:
     import os
     env = {}
@@ -145,7 +147,7 @@ def vs_config(pack_key: str = "female") -> dict:
         pass
     g = lambda k, d="": (env.get(k) or os.environ.get(k) or d).strip()  # noqa: E731
     voice = g("AICC_VS_VOICE_MALE") if pack_key == "male" else g("AICC_VS_VOICE")
-    return {"url": g("AICC_VS_URL", "http://127.0.0.1:3900").rstrip("/"), "model": g("AICC_VS_MODEL", "omnivoice"),
+    return {"url": g("AICC_VS_URL", "http://127.0.0.1:3900").rstrip("/"), "model": g("AICC_VS_MODEL", "moss-tts-nano"),
             "voice": voice or "default", "instruct": g("AICC_VS_INSTRUCT")}
 
 

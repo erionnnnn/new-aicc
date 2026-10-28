@@ -436,7 +436,7 @@ function PilotPanel({ me }: { me: Me }) {
             모델 라이선스는 사용 전 회사 기준으로 확인하세요.</p>
           <div className="grid4">
             <Field label="주소"><input name="vsurl" defaultValue={a.vs_url} placeholder="http://127.0.0.1:3900" /></Field>
-            <Field label="모델"><input name="vsmodel" defaultValue={a.vs_model} placeholder="omnivoice" /></Field>
+            <Field label="모델"><input name="vsmodel" defaultValue={a.vs_model} placeholder="moss-tts-nano" /></Field>
             <Field label="여성 목소리 프로필 이름"><input name="vsvoice" defaultValue={a.vs_voice} placeholder="aicc_female" /></Field>
             <Field label="남성 목소리 프로필 이름"><input name="vsvoicem" defaultValue={a.vs_voice_male} placeholder="aicc_male" /></Field>
           </div>
