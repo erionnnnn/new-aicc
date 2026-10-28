@@ -129,6 +129,8 @@ def voice_tag(pack_key: str, engine: str = "gemini") -> str:
         c = vs_config(pack_key)
         # ':profile' — 저장된 프로필로만 만든 음원(그 전 무작위 목소리 음원은 '전체 만들기'에서 다시 만듦)
         return f"tts:voicestudio:{c['model']}:{c['voice']}:{TTS_REV}:profile"
+    if engine == "gemini-live":
+        return f"tts:gemini-live:{pinned_live_model() or '?'}:{GEMINI_VOICES.get(pack_key, 'Aoede')}:{TTS_REV}"
     return f"tts:gemini:{pinned_model() or '?'}:{GEMINI_VOICES.get(pack_key, 'Aoede')}:{TTS_REV}"
 
 
@@ -375,9 +377,131 @@ def normalize_wav(wav16k: bytes, target_dbfs: float = -20.0, peak_dbfs: float = 
     return buf.getvalue()
 
 
+# ---------------- Gemini Live 로 고정 멘트 저장(기존 프로그램 v11.49 'ARS 음성 저장' 방식) ----------------
+# v11.49: 고정 멘트를 통화 중 AI 와 '같은 Live 모델·같은 목소리'로 한 번 읽혀 WAV 로 저장하고, 이후 통화는 WAV 만 재생.
+# 문장마다 따로 연결 + 20초 제한, 실패한 문장은 건너뛰고 계속, 이미 있는 음원은 다시 만들지 않음.
+# 여기서는 더해서 모델이 실제로 읽은 문장(받아쓰기)을 원문과 비교해, 다르게 읽은 음원은 저장하지 않는다.
+LIVE_READ_INSTRUCTION = (
+    "당신은 전화 안내용 한국어 음성 녹음 성우다. 사용자가 제공한 따옴표 안의 문장을 내용 추가, 삭제, 요약, 설명 없이 "
+    "정확히 한 번만 자연스럽고 친절한 한국어로 읽는다. 문장 앞뒤에 인사나 설명을 덧붙이지 않는다.")
+LIVE_TTS_TIMEOUT_S = 20.0
+LIVE_MATCH_MIN = 0.75  # 읽은 문장과 원문의 글자 일치율(띄어쓰기·문장부호 제외) 최소값
+
+
+def _live_model_file():  # noqa: ANN202
+    return _model_file().parent / "tts_live_model.txt"
+
+
+def pinned_live_model() -> str | None:
+    try:
+        return _live_model_file().read_text(encoding="utf-8").strip() or None
+    except OSError:
+        return None
+
+
+def _pin_live(model: str) -> None:
+    try:
+        f = _live_model_file()
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(model, encoding="utf-8")
+    except OSError:
+        pass
+
+
+def read_match(expected: str, heard: str) -> float:
+    """원문과 받아쓰기의 일치율(0~1). 숫자·한글·영문만 비교."""
+    import difflib
+    import re
+    norm = lambda t: re.sub(r"[^0-9A-Za-z가-힣]", "", t or "")  # noqa: E731
+    a, b = norm(expected), norm(heard)
+    if not a or not b:
+        return 0.0
+    return difflib.SequenceMatcher(None, a, b).ratio()
+
+
+def synth_gemini_live(text: str, pack_key: str, api_key: str | None, model: str | None = None) -> bytes:  # pragma: no cover
+    if not api_key:
+        raise TTSError("Gemini 키가 없습니다(설정 > 단말 > 이 PC 에이전트에서 입력)")
+    try:
+        import asyncio
+
+        from google import genai
+        from google.genai import types
+    except ImportError as e:
+        raise TTSError("google-genai 가 설치되지 않았습니다(설치 스크립트를 다시 실행)") from e
+    from aicc_agent.ai import LIVE_MODELS
+
+    client = genai.Client(api_key=api_key)
+    voice = GEMINI_VOICES.get(pack_key, "Aoede")
+    cfg = types.LiveConnectConfig(
+        response_modalities=["AUDIO"], system_instruction=LIVE_READ_INSTRUCTION,
+        speech_config=types.SpeechConfig(voice_config=types.VoiceConfig(
+            prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice))),
+        output_audio_transcription=types.AudioTranscriptionConfig())
+
+    async def run(m: str) -> tuple[bytes, str]:
+        pcm, heard = bytearray(), []
+        async with client.aio.live.connect(model=m, config=cfg) as session:
+            await session.send_client_content(
+                turns={"role": "user", "parts": [{"text": f'다음 따옴표 안의 문장만 정확히 한 번 읽어주세요.\n문장: "{text}"'}]},
+                turn_complete=True)
+            async for ev in session.receive():
+                sc = getattr(ev, "server_content", None)
+                if not sc:
+                    continue
+                out = getattr(sc, "output_transcription", None)
+                if out and getattr(out, "text", None):
+                    heard.append(out.text)
+                if sc.model_turn:
+                    for part in sc.model_turn.parts or []:
+                        if part.inline_data and part.inline_data.data:
+                            pcm.extend(part.inline_data.data)
+                if sc.turn_complete:
+                    break
+        return bytes(pcm), "".join(heard).strip()
+
+    pinned = model or pinned_live_model()
+    models = [pinned] if pinned else list(dict.fromkeys(LIVE_MODELS))
+    last = ""
+    for m in models:
+        for _attempt in range(2):
+            try:
+                pcm, heard = asyncio.run(asyncio.wait_for(run(m), timeout=LIVE_TTS_TIMEOUT_S))
+            except asyncio.TimeoutError:
+                last = f"{m}: {int(LIVE_TTS_TIMEOUT_S)}초 시간 초과"
+                continue
+            except Exception as e:  # noqa: BLE001
+                msg = str(e)
+                if "API key not valid" in msg or "API_KEY_INVALID" in msg or "PERMISSION_DENIED" in msg:
+                    raise TTSError("Gemini 키가 올바르지 않습니다. 설정 > 단말 > 이 PC 에이전트에서 다시 넣으세요.") from None
+                last = f"{m}: {type(e).__name__} {msg[:160]}"
+                if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
+                    import time
+                    time.sleep(30)
+                    continue
+                break  # 모델 없음 등 → 다음 모델
+            if not pcm:
+                last = f"{m}: 음성 없음"
+                continue
+            if heard and read_match(text, heard) < LIVE_MATCH_MIN:
+                last = f"다르게 읽음: “{heard[:60]}”"
+                continue  # 한 번 더 읽힌다
+            if not pinned:
+                _pin_live(m)
+            return normalize_wav(_wav16k(_resample24(pcm)))
+    raise TTSError(f"Gemini Live 음성 저장 실패 — {last}")
+
+
+def _resample24(pcm: bytes) -> bytes:
+    from aicc_agent.audio import resample_linear
+    return resample_linear(pcm, 24000, TARGET_RATE)
+
+
 def synthesize(engine: str, text: str, pack_key: str, *, api_key: str | None = None, model: str | None = None) -> bytes:
     if engine == "gemini":
         return synth_gemini(text, pack_key, api_key, model)
+    if engine == "gemini-live":
+        return synth_gemini_live(text, pack_key, api_key, model)
     if engine == "voicestudio":
         return synth_voicestudio(text, pack_key)
     if engine == "edge":

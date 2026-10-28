@@ -87,11 +87,11 @@ function Voice({ me }: { me: Me }) {
       let made = 0; const failed: any[] = [];
       for (;;) {
         const r = await api.post(`/api/v1/voice-packs/${pack.key}/tts`,
-          { engine, only_missing: !unify && (onlyMissing || engine === "gemini"), unify,
-            max_items: engine === "gemini" ? 6 : engine === "voicestudio" ? 2 : 0 });
+          { engine, only_missing: !unify && (onlyMissing || engine === "gemini" || engine === "gemini-live"), unify,
+            max_items: engine === "gemini" ? 6 : engine === "gemini-live" ? 5 : engine === "voicestudio" ? 2 : 0 });
         made += r.generated; failed.push(...r.failed);
         packs.reload();
-        if ((engine !== "gemini" && engine !== "voicestudio") || !r.remaining || r.generated === 0) break;
+        if (!["gemini", "gemini-live", "voicestudio"].includes(engine) || !r.remaining || r.generated === 0) break;
         setTtsMsg(`진행 중: ${made}개 생성, 남은 ${r.remaining}개…`);
       }
       setTtsMsg(failed.length ? `일부 실패: ${made}개 생성, ${failed.length}개 실패(${failed[0].error})` : `완료: ${made}개 생성. 들어 보고 승인하세요.`);
@@ -141,6 +141,18 @@ function Voice({ me }: { me: Me }) {
           <p className="muted small">‘김태희 실장’은 업무상 안내 역할 이름입니다. 특정 인물의 목소리를 흉내 내지 않고 승인된 녹음만 사용합니다. 녹음 파일은 WAV·MP3·FLAC 을 올리면 자동 변환됩니다.</p>
           {admin && (
             <div className="panel tts-box">
+              <h3>ARS 음성 저장(기존 프로그램 v11.49 방식 · Gemini Live)</h3>
+              <p className="muted small">통화 중 AI와 같은 Gemini Live 목소리({pack.key === "female" ? "Aoede" : "Charon"})로 고정 안내 문구를 한 번씩 읽혀 저장합니다.
+                이미 저장된 음원은 다시 만들지 않고, 문장마다 20초 안에 못 만들면 건너뛰고 계속합니다. 모델이 읽은 문장을 받아써서 원문과 다르게 읽은 음원은 저장하지 않습니다.
+                저장한 뒤 통화에서는 저장된 음원만 재생하고, 통화 중 AI 답도 같은 Live 목소리로 읽습니다. 중간에 멈추면 다시 누르면 빠진 것부터 이어서 합니다.</p>
+              <div className="toolbar">
+                <button className="btn primary" disabled={busy} onClick={() => tts("gemini-live", true)}>
+                  {busy ? "저장 중…" : "ARS 음성 저장(빠진 것만)"}
+                </button>
+                <button className="btn" disabled={busy} onClick={() => tts("gemini-live", false, true)}>
+                  {busy ? "저장 중…" : "Live 목소리로 전체 다시 저장(목소리 통일)"}
+                </button>
+              </div>
               <h3>VoiceStudio 로 만들기(무료·이 PC)</h3>
               <p className="muted small">설정 &gt; 단말 &gt; 이 PC 에이전트에 VoiceStudio 모델·목소리 프로필을 넣은 뒤 누르세요. 모든 안내를 같은 목소리로 다시 만들고, 통화 중 AI 답도 같은 목소리로 읽습니다.</p>
               <div className="toolbar">

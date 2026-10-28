@@ -92,3 +92,12 @@ def test_hourly_stats(admin):
     assert 0 <= h["hour"] <= 23 and h["connect_rate"] == round(100 * h["connected"] / h["calls"], 1)
     camp_only = admin.get(f"/api/v1/stats/hourly?include_mock=true&campaign_id={camp['campaign_id']}").json()
     assert camp_only["total"]["calls"] == n
+
+
+def test_live_read_match_and_tag():
+    from aicc_api import tts
+    assert tts.read_match("네, 11월 3일부터 가능하신 게 맞으실까요?", "네 11월 3일부터 가능하신 게 맞으실까요") > 0.95
+    assert tts.read_match("근무 중이신가요?", "안녕하세요 좋은간병입니다 무엇을 도와드릴까요") < tts.LIVE_MATCH_MIN
+    assert tts.read_match("", "아무거나") == 0.0
+    assert tts.voice_tag("female", "gemini-live").startswith("tts:gemini-live:")
+    assert tts.voice_tag("male", "gemini-live").split(":")[3] == "Charon"

@@ -206,7 +206,7 @@ def _to_wav16k(data: bytes) -> bytes:
 
 
 class TTSIn(BaseModel):
-    engine: str = Field(default="edge", pattern="^(voicestudio|gemini|edge|sapi|test)$")
+    engine: str = Field(default="edge", pattern="^(voicestudio|gemini|gemini-live|edge|sapi|test)$")
     only_missing: bool = False
     max_items: int = Field(default=0, ge=0, le=200)  # 0 = 전부. Gemini 는 분당 한도가 있어 화면이 나눠 요청한다
     unify: bool = False  # 목소리 통일: 같은 모델·목소리·말투로 만든 것이 아닌 모든 칸(기존 녹음 포함)을 다시 만든다
@@ -254,7 +254,8 @@ def generate_tts(key: str, body: TTSIn, p: Principal = Depends(current_user), db
     if not m.get("speaker_name"):
         raise AppError(422, "SPEAKER_REQUIRED", "안내 인물 이름을 먼저 저장하세요")
     made, failed = 0, []
-    env = _read_agent_env() if body.engine == "gemini" else {}
+    env = _read_agent_env() if body.engine in ("gemini", "gemini-live") else {}
+    voiced = ("gemini", "gemini-live", "voicestudio")  # 출처 표시로 목소리 통일 여부를 판단하는 엔진
     remaining = 0
     for clip, c in m["clips"].items():
         if body.unify:
@@ -273,15 +274,16 @@ def generate_tts(key: str, body: TTSIn, p: Principal = Depends(current_user), db
             wav16k = tts.synthesize(body.engine, text, key, api_key=env.get("GEMINI_API_KEY") or None)
         except tts.TTSError as e:
             failed.append({"clip": clip, "error": str(e)})
-            if made == 0:  # 첫 문구부터 실패하면 같은 원인이므로 바로 중단
+            # 처음부터 실패하면 같은 원인(키·모델)이므로 중단. Live 저장은 v11.49 처럼 문장별 실패를 건너뛰고 계속하되,
+            # 처음 3개가 연달아 실패하면 중단
+            if made == 0 and (body.engine != "gemini-live" or len(failed) >= 3):
                 break
             continue
         c.update(_store_clip(p, key, clip, wav16k), text=text,
-                 source=tts.voice_tag(key, body.engine) if body.engine in ("gemini", "voicestudio")
-                 else f"tts:{body.engine}")
+                 source=tts.voice_tag(key, body.engine) if body.engine in voiced else f"tts:{body.engine}")
         made += 1
     if made:
-        if body.engine in ("gemini", "voicestudio"):
+        if body.engine in voiced:
             tts.set_pack_engine(key, body.engine)  # 통화 중 AI 답도 같은 엔진·목소리로
         m["company_name"] = p.org.company_name
         m["approved_by"] = None

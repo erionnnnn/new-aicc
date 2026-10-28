@@ -219,6 +219,8 @@ class GeminiTTSAI(ExceptionAI):  # pragma: no cover - 외부 API
             if tts.vs_config(pack).get("model") and os.environ.get("AICC_AI_TTS_ENGINE", "") != "gemini" and \
                     tts.pack_engine(pack) == "voicestudio":
                 wav = tts.synth_voicestudio(text, pack)
+            elif tts.pack_engine(pack) == "gemini-live" and os.environ.get("AICC_AI_TTS_ENGINE", "") != "gemini":
+                wav = tts.synth_gemini_live(text, pack, self.api_key)  # 안내 음원과 같은 Live 목소리
             else:
                 wav = tts.synth_gemini(text, pack, self.api_key)
             import io
