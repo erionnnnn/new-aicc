@@ -88,7 +88,7 @@ function Voice({ me }: { me: Me }) {
       for (;;) {
         const r = await api.post(`/api/v1/voice-packs/${pack.key}/tts`,
           { engine, only_missing: !unify && (onlyMissing || engine === "gemini"), unify,
-            max_items: engine === "gemini" ? 6 : engine === "voicestudio" ? 4 : 0 });
+            max_items: engine === "gemini" ? 6 : engine === "voicestudio" ? 2 : 0 });
         made += r.generated; failed.push(...r.failed);
         packs.reload();
         if ((engine !== "gemini" && engine !== "voicestudio") || !r.remaining || r.generated === 0) break;

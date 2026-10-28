@@ -171,9 +171,14 @@ def set_pack_engine(pack_key: str, engine: str) -> None:
 _vs_profile_cache: dict[tuple[str, str], str] = {}
 
 
+def httpx_timeout():  # noqa: ANN201
+    import httpx
+    return httpx.TimeoutException
+
+
 def vs_profiles(url: str) -> list[dict]:
     import httpx
-    r = httpx.get(f"{url}/v1/audio/voices", timeout=10)
+    r = httpx.get(f"{url}/v1/audio/voices", timeout=httpx.Timeout(60, connect=5))  # 생성 중이면 응답이 늦을 수 있음
     r.raise_for_status()
     return [v for v in (r.json().get("voices") or []) if v.get("type") == "profile"]
 
@@ -192,6 +197,8 @@ def vs_profile_id(url: str, name: str) -> str:
         raise TTSError("VoiceStudio 목소리 프로필 이름이 비어 있습니다. 설정 > 단말 > 이 PC 에이전트에 저장한 프로필 이름을 넣으세요")
     try:
         profs = vs_profiles(url)
+    except httpx_timeout() as e:
+        raise TTSError("VoiceStudio 가 응답하지 않습니다(음성을 만드는 중이면 늦을 수 있음). 잠시 뒤 다시 누르세요") from e
     except Exception as e:  # noqa: BLE001
         raise TTSError(f"VoiceStudio 에 연결하지 못했습니다({url}). 프로그램이 켜져 있는지 확인하세요 ({type(e).__name__})") from e
     norm = lambda x: unicodedata.normalize("NFKC", str(x or "")).strip().casefold()  # noqa: E731
@@ -212,11 +219,19 @@ def synth_voicestudio(text: str, pack_key: str) -> bytes:  # pragma: no cover - 
     body = {"model": c["model"], "input": text, "voice": voice_id, "response_format": "wav", "language": "ko"}
     if c["instruct"]:
         body["instructions"] = c["instruct"]  # 별도 칸으로 전달(문장에 섞지 않음 → 지시문을 읽어 버리는 문제 없음)
-    try:
-        r = httpx.post(f"{c['url']}/v1/audio/speech", json=body, timeout=180)
-    except httpx.HTTPError as e:
-        raise TTSError(f"VoiceStudio 에 연결하지 못했습니다({c['url']}). VoiceStudio 프로그램이 켜져 있는지 확인하세요 "
-                       f"({type(e).__name__})") from e
+    r = None
+    for attempt in range(2):  # 그래픽카드 없는 PC 는 문장 하나에 수십 초~수 분 걸릴 수 있어 넉넉히 기다리고 한 번 더 시도
+        try:
+            r = httpx.post(f"{c['url']}/v1/audio/speech", json=body, timeout=httpx.Timeout(600, connect=5))
+            break
+        except httpx.ConnectError as e:
+            raise TTSError(f"VoiceStudio 에 연결하지 못했습니다({c['url']}). VoiceStudio 프로그램이 켜져 있는지 확인하세요") from e
+        except httpx.TimeoutException as e:
+            if attempt == 1:
+                raise TTSError("VoiceStudio 가 10분 안에 음성을 만들지 못했습니다(그래픽카드 없는 PC 에서 느림). "
+                               "VoiceStudio 에서 다른 작업을 멈추고 같은 버튼을 다시 누르면 이어서 만듭니다") from e
+        except httpx.HTTPError as e:
+            raise TTSError(f"VoiceStudio 통신 오류({type(e).__name__})") from e
     if r.status_code != 200:
         try:
             msg = r.json().get("error", {}).get("message") or r.text
