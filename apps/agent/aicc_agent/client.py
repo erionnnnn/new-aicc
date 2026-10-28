@@ -90,6 +90,9 @@ class AgentClient:
                          files={"file": ("call.wav", wav, "audio/wav")},
                          data={"sha256": sha256, "duration_ms": str(duration_ms)})
 
+    def post_analysis(self, call_id: str, analysis: dict) -> dict:
+        return self._req("POST", f"/api/v1/agent/calls/{call_id}/analysis", json_body=analysis)
+
     def recording_failed(self, call_id: str, error: str) -> dict:
         return self._req("POST", f"/api/v1/agent/calls/{call_id}/recording-failed", json_body={"error": error})
 

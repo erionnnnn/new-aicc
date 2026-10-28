@@ -271,6 +271,56 @@ def review_call(call_id: str, body: ReviewIn, p: Principal = Depends(current_use
     return {"review_state": call.review_state}
 
 
+# ------------------ 시간대별 연결률 ------------------
+NOT_CONNECTED = {"NO_ANSWER", "LINE_BUSY", "DIAL_FAILED", "DEVICE_ERROR", "STOPPED"}
+RESPONDED = {"CONFIRMED", "ANYTIME", "UNCONFIRMED", "CALLBACK_REQUESTED", "REFUSED", "WRONG_PERSON",
+             "CONSULT_REQUESTED"}
+
+
+@router.get("/stats/hourly")
+def hourly_stats(days: int = 30, campaign_id: str | None = None, include_mock: bool = False,
+                 p: Principal = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    """KST 발신 시각(시)별: 건수, 연결(받음)률, 응답(간병사가 의미 있는 답을 함)률, 날짜 확정률."""
+    require(p, "view_results")
+    from datetime import timedelta
+    days = max(1, min(days, 365))
+    since = services.utcnow() - timedelta(days=days)
+    stmt = select(CallSession).where(CallSession.organization_id == p.org.id, CallSession.started_at >= since,
+                                     CallSession.ended_at.is_not(None))
+    if campaign_id:
+        stmt = stmt.where(CallSession.campaign_id == campaign_id)
+    if not include_mock:
+        stmt = stmt.where(CallSession.is_mock.is_(False))
+    rows: dict[int, dict] = {}
+    for c in db.scalars(stmt):
+        h = services.aware(c.started_at).astimezone(services.KST).hour
+        r = rows.setdefault(h, {"hour": h, "calls": 0, "connected": 0, "responded": 0, "confirmed": 0})
+        r["calls"] += 1
+        # 사람이 받은 통화(음성사서함·무응답·통화중·발신 실패 제외)
+        connected = c.outcome is not None and c.outcome not in NOT_CONNECTED and c.outcome != "VOICEMAIL"
+        if connected:
+            r["connected"] += 1
+        if c.outcome in RESPONDED:
+            r["responded"] += 1
+        if c.outcome in ("CONFIRMED", "ANYTIME"):
+            r["confirmed"] += 1
+
+    def pct(a: int, b: int) -> float | None:
+        return round(100.0 * a / b, 1) if b else None
+
+    out = []
+    for h in sorted(rows):
+        r = rows[h]
+        out.append({**r, "connect_rate": pct(r["connected"], r["calls"]),
+                    "response_rate": pct(r["responded"], r["calls"]),
+                    "confirm_rate": pct(r["confirmed"], r["calls"])})
+    total = {k: sum(r[k] for r in rows.values()) for k in ("calls", "connected", "responded", "confirmed")}
+    total.update(connect_rate=pct(total["connected"], total["calls"]),
+                 response_rate=pct(total["responded"], total["calls"]),
+                 confirm_rate=pct(total["confirmed"], total["calls"]))
+    return {"days": days, "campaign_id": campaign_id, "include_mock": include_mock, "hours": out, "total": total}
+
+
 # ------------------ 녹음 ------------------
 @router.get("/recordings")
 def list_recordings(p: Principal = Depends(current_user), db: Session = Depends(get_db)) -> list[dict]:

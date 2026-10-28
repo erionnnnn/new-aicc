@@ -132,6 +132,33 @@ async def recording(call_id: str, file: UploadFile = File(...), sha256: str = Fo
     return out
 
 
+class AnalysisIn(BaseModel):
+    """통화 후 AI 분석 결과(제안 전용). 서버는 이 값으로 날짜·상태를 바꾸지 않는다."""
+    work_status: str = Field(pattern="^(WORKING|NOT_WORKING|UNKNOWN)$")
+    end_date: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+    available_date: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+    preferences: list[str] = Field(default=[], max_length=10)
+    issues: list[str] = Field(default=[], max_length=10)
+    summary: str = Field(default="", max_length=300)
+    evidence: str = Field(default="", max_length=300)
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    model: str | None = Field(default=None, max_length=80)
+    engine: str | None = Field(default=None, max_length=40)
+
+
+@router.post("/agent/calls/{call_id}/analysis")
+def call_analysis(call_id: str, body: AnalysisIn, p: Principal = Depends(current_device),
+                  db: Session = Depends(get_db)) -> dict:
+    call = services.get_call_for_device(db, p, call_id)
+    data = body.model_dump()
+    data["preferences"] = [x[:80] for x in data["preferences"]]
+    data["issues"] = [x[:80] for x in data["issues"]]
+    data["at"] = services.kst_text(services.utcnow())
+    call.flags = dict(call.flags or {}, ai_analysis=data)  # 새 dict 로 바꿔 JSON 변경이 저장되게
+    db.commit()
+    return {"ok": True}
+
+
 class RecFailIn(BaseModel):
     error: str = Field(max_length=500)
 

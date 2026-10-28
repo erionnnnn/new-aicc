@@ -49,6 +49,7 @@ class RunnerConfig:
     ring_timeout_ms: int = 40000
     poll_ms: int = 200
     listen_ms: int = 40           # 재생 중 상대 음성 확인 간격
+    analysis_async: bool = True   # 통화 후 AI 분석을 백그라운드로(다음 통화를 늦추지 않음)
     greeting_wait_ms: int = 1500  # 받자마자 '여보세요' 하는 동안 기다림
     barge_threshold: float = 600.0  # 안내 재생 중에는 평소(300)보다 큰 소리만 상대 말로 본다(메아리·잡음 오인 방지)
     barge_min_ms: int = 400         # 그 소리가 이만큼 이어져야 끼어들기로 인정
@@ -127,6 +128,7 @@ class CallRunner:
         self.ai = ai
         self.cfg = config or RunnerConfig()
         self.stop_requested = False
+        self.analyzer = None  # 통화 후 AI 분석기(제안 전용). launcher 가 키가 있을 때 붙인다
 
     # ---------------- 이벤트 ----------------
     def _emit(self, type_: str, turn: int, payload: dict | None = None, event_id: str | None = None) -> str:
@@ -629,6 +631,34 @@ class CallRunner:
             self._safe_wait(300)
         self.client.finish(self.call_id, outcome=outcome, observation=self.flow.obs.as_dict(),
                            review_reasons=self.summary.review_reasons, phone_idle=idle)
+        self._start_analysis()
+
+    def _start_analysis(self) -> None:
+        """통화 후 AI 분석(제안 전용). 간병사 말이 한 마디라도 있을 때만, 실패해도 통화 결과에는 영향 없음."""
+        an = self.analyzer
+        if an is None or (self.is_mock and an.name != "mock"):
+            return
+        lines = self._dialog_lines()
+        if not any(x[0] == "hear" and x[1].strip() for x in self._log):
+            return
+        call_id = self.call_id
+        ref = self.flow.reference
+
+        def work() -> None:
+            try:
+                res = an.analyze(lines, ref)
+                if res:
+                    res.setdefault("engine", an.name)
+                    self.client.post_analysis(call_id, res)
+                    log.info("[통화 %s] AI 분석: %s", call_id[:8], res.get("summary"))
+            except Exception as e:  # noqa: BLE001
+                log.warning("[통화 %s] AI 분석 실패: %s: %s", call_id[:8], type(e).__name__, str(e)[:150])
+
+        if self.cfg.analysis_async:
+            import threading
+            threading.Thread(target=work, name=f"analysis-{call_id[:8]}", daemon=True).start()
+        else:
+            work()
 
     def _safe_wait(self, ms: int) -> None:
         try:

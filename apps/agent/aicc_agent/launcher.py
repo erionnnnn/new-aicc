@@ -91,7 +91,14 @@ def build_agent(env: dict[str, str], base: str):  # noqa: ANN201
         ai = make_ai("gemini-live" if env.get("AICC_AI_VOICE") == "live" else "gemini-tts")
     else:
         ai = FailingAI()  # 키가 없으면 예외 질문은 '상담 요청'으로 넘기고 날짜는 저장하지 않는다
-    return Agent(client, dev, stt, ai)
+    agent = Agent(client, dev, stt, ai)
+    if env.get("GEMINI_API_KEY") and env.get("AICC_CALL_ANALYSIS", "1") != "0":
+        from .analysis import GeminiAnalyzer
+        try:
+            agent.runner.analyzer = GeminiAnalyzer(env["GEMINI_API_KEY"])  # 통화 후 AI 분석(제안 전용)
+        except Exception as e:  # noqa: BLE001
+            log.warning("통화 후 AI 분석을 켜지 못했습니다: %s", e)
+    return agent
 
 
 def supervise_agent(env_file: Path, base: str, stop: threading.Event) -> None:  # pragma: no cover

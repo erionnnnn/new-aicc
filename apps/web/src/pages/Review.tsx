@@ -33,6 +33,27 @@ function Player({ rec, canPlay, callEnded }: { rec: any; canPlay: boolean; callE
   );
 }
 
+const WS: Record<string, string> = { WORKING: "근무 중", NOT_WORKING: "근무 안 함", UNKNOWN: "알 수 없음" };
+
+function AISuggestion({ a, canEdit, onUse }: { a: any; canEdit: boolean; onUse: (d: string) => void }) {
+  if (!a) return null;
+  return (
+    <div className="ai-box">
+      <h3>AI 제안 <span className="badge muted">자동 반영 안 됨</span></h3>
+      {a.summary && <p><b>요약</b> {a.summary}</p>}
+      <p>근무 상태: {WS[a.work_status] ?? a.work_status}</p>
+      <p>종료일: <DateCell value={a.end_date} /></p>
+      <p>가능일: <DateCell value={a.available_date} />
+        {a.available_date && canEdit && <> <button className="btn ghost small" onClick={() => onUse(a.available_date)}>입력칸에 넣기</button></>}</p>
+      {(a.preferences ?? []).length > 0 && <p>선호 조건: {a.preferences.join(" · ")}</p>}
+      {(a.issues ?? []).length > 0 && <p>현장 용건: {a.issues.join(" · ")}</p>}
+      {a.evidence && <blockquote className="small">“{a.evidence}”</blockquote>}
+      <p className="muted small">신뢰도 {Math.round((a.confidence ?? 0) * 100)}% · {a.model ?? a.engine ?? "AI"} · {a.at}
+        <br />통화 내용을 AI가 읽고 뽑은 제안입니다. 명부 날짜는 바뀌지 않습니다. 녹음으로 확인한 뒤 직접 반영하세요.</p>
+    </div>
+  );
+}
+
 function Detail({ me, callId, onDone }: { me: Me; callId: string; onDone: () => void }) {
   const call = useAsync(() => api.get<any>(`/api/v1/calls/${callId}`), [callId]);
   const [date, setDate] = useState("");
@@ -80,6 +101,7 @@ function Detail({ me, callId, onDone }: { me: Me; callId: string; onDone: () => 
             {" "}{obs?.confirmation_state === "CONFIRMED" ? <span className="badge ok">상대 확인</span> : <span className="badge warn">자동 반영 안 됨</span>}</p>
           {obs?.range?.[0] && <p>응답 범위: {obs.range[0]} ~ {obs.range[1]} (날짜 아님)</p>}
           {(c.review_reasons ?? []).length > 0 && <p>검수 사유: {c.review_reasons.map(reasonText).join(", ")}</p>}
+          <AISuggestion a={c.flags?.ai_analysis} canEdit={canEdit} onUse={(d) => { setDate(d); if (!reason) setReason("AI 제안 확인 후 반영"); }} />
         </div>
         <div>
           <h3>근거 발화</h3>

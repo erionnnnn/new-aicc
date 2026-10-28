@@ -251,3 +251,6 @@ audio { height: 32px; max-width: 260px; }
 .tts-box h3 { margin-top: 0; color: var(--ink); }
 .env-switch { display: flex; gap: var(--s3); align-items: center; padding: var(--s3) 0; border-top: 1px solid var(--line-soft); margin-top: var(--s3); flex-wrap: wrap; }
 .pilot { border-left: 4px solid var(--warn); }
+
+.ai-box { margin-top: var(--s4); padding: var(--s3) var(--s4); border: 1px dashed var(--line); border-radius: var(--radius-panel); background: var(--bg); }
+.ai-box h3 { margin-top: 0; }
