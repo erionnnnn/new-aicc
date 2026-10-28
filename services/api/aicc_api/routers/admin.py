@@ -225,11 +225,13 @@ def voicestudio_status(p: Principal = Depends(current_user)) -> dict:
         r = httpx.get(f"{c['url']}/v1/models", timeout=5)
         out["running"] = r.status_code == 200
         out["models"] = [m.get("id") for m in (r.json().get("data") or [])][:50] if r.status_code == 200 else []
-        v = httpx.get(f"{c['url']}/v1/audio/voices", timeout=5)
-        if v.status_code == 200:
-            j = v.json()
-            items = j.get("voices") or j.get("data") or (j if isinstance(j, list) else [])
-            out["voices"] = [(x.get("name") or x.get("id")) if isinstance(x, dict) else str(x) for x in items][:100]
+        out["voices"] = [str(v.get("name")) for v in tts.vs_profiles(c["url"])][:100]  # 저장된 프로필만
+        try:
+            tts._vs_profile_cache.clear()
+            out["voice_ok"] = bool(tts.vs_profile_id(c["url"], c["voice"]))
+        except tts.TTSError as e:
+            out["voice_ok"] = False
+            out["voice_error"] = str(e)
     except Exception as e:  # noqa: BLE001
         out["error"] = type(e).__name__
     return out

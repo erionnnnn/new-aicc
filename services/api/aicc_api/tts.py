@@ -127,7 +127,8 @@ def voice_tag(pack_key: str, engine: str = "gemini") -> str:
     """음원 출처 표시(같은 표시 = 같은 엔진·모델·목소리로 만든 음원 → '전체 목소리 통일'이 건너뜀)."""
     if engine == "voicestudio":
         c = vs_config(pack_key)
-        return f"tts:voicestudio:{c['model']}:{c['voice']}:{TTS_REV}"
+        # ':profile' — 저장된 프로필로만 만든 음원(그 전 무작위 목소리 음원은 '전체 만들기'에서 다시 만듦)
+        return f"tts:voicestudio:{c['model']}:{c['voice']}:{TTS_REV}:profile"
     return f"tts:gemini:{pinned_model() or '?'}:{GEMINI_VOICES.get(pack_key, 'Aoede')}:{TTS_REV}"
 
 
@@ -165,10 +166,48 @@ def set_pack_engine(pack_key: str, engine: str) -> None:
         pass
 
 
+_vs_profile_cache: dict[tuple[str, str], str] = {}
+
+
+def vs_profiles(url: str) -> list[dict]:
+    import httpx
+    r = httpx.get(f"{url}/v1/audio/voices", timeout=10)
+    r.raise_for_status()
+    return [v for v in (r.json().get("voices") or []) if v.get("type") == "profile"]
+
+
+def vs_profile_id(url: str, name: str) -> str:
+    """설정한 이름을 VoiceStudio 의 '저장된 목소리 프로필' id 로 바꾼다. 없으면 생성하지 않고 알린다.
+
+    VoiceStudio 는 프로필을 못 찾으면 이름을 엔진 프리셋으로 넘기고, OmniVoice 는 그때 매번 다른 목소리
+    (남녀 무작위)를 만든다(2026-10-28 실사용 확인) — 그래서 반드시 저장된 프로필로만 만든다.
+    """
+    import unicodedata
+    key = (url, name)
+    if key in _vs_profile_cache:
+        return _vs_profile_cache[key]
+    if not name or name.strip().lower() == "default":
+        raise TTSError("VoiceStudio 목소리 프로필 이름이 비어 있습니다. 설정 > 단말 > 이 PC 에이전트에 저장한 프로필 이름을 넣으세요")
+    try:
+        profs = vs_profiles(url)
+    except Exception as e:  # noqa: BLE001
+        raise TTSError(f"VoiceStudio 에 연결하지 못했습니다({url}). 프로그램이 켜져 있는지 확인하세요 ({type(e).__name__})") from e
+    norm = lambda x: unicodedata.normalize("NFKC", str(x or "")).strip().casefold()  # noqa: E731
+    hits = [v for v in profs if v.get("voice_id") == name or norm(v.get("name")) == norm(name)]
+    if len(hits) != 1:
+        names = ", ".join(str(v.get("name")) for v in profs[:15]) or "(없음)"
+        why = "같은 이름이 여러 개입니다" if hits else "찾지 못했습니다"
+        raise TTSError(f"VoiceStudio 에서 목소리 프로필 '{name}'을(를) {why}. 저장된 프로필: {names}. "
+                       "음성 디자인 화면 왼쪽 아래 '프로필 이름'에 이름을 넣고 저장했는지 확인하세요")
+    _vs_profile_cache[key] = hits[0]["voice_id"]
+    return hits[0]["voice_id"]
+
+
 def synth_voicestudio(text: str, pack_key: str) -> bytes:  # pragma: no cover - 로컬 프로그램 필요
     import httpx
     c = vs_config(pack_key)
-    body = {"model": c["model"], "input": text, "voice": c["voice"], "response_format": "wav", "language": "ko"}
+    voice_id = vs_profile_id(c["url"], c["voice"])  # 저장된 프로필이 아니면 매번 다른(남녀 무작위) 목소리가 나온다
+    body = {"model": c["model"], "input": text, "voice": voice_id, "response_format": "wav", "language": "ko"}
     if c["instruct"]:
         body["instructions"] = c["instruct"]  # 별도 칸으로 전달(문장에 섞지 않음 → 지시문을 읽어 버리는 문제 없음)
     try:

@@ -149,7 +149,8 @@ function Voice({ me }: { me: Me }) {
                 </button>
                 <button className="btn ghost" disabled={busy} onClick={() => run(async () => {
                   const r = await api.get<any>("/api/v1/voicestudio/status");
-                  setTtsMsg(r.running ? `완료: VoiceStudio 연결됨(${r.url}) · 모델 ${r.model} · 목소리 ${r.voice}${r.voices.length ? ` · 프로필: ${r.voices.slice(0, 10).join(", ")}` : ""}`
+                  setTtsMsg(r.running && r.voice_ok ? `완료: VoiceStudio 연결됨(${r.url}) · 모델 ${r.model} · 목소리 프로필 ${r.voice} 확인`
+                            : r.running ? `VoiceStudio 는 켜져 있지만 목소리 프로필에 문제가 있습니다: ${r.voice_error ?? ""}`
                                       : `VoiceStudio 에 연결되지 않습니다(${r.url}) — 프로그램이 켜져 있는지 확인하세요`);
                 })}>연결 확인</button>
               </div>
