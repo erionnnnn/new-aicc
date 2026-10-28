@@ -745,8 +745,6 @@ def put_local_agent(body: LocalAgentIn, p: Principal = Depends(current_user), db
         if jp.suffix.lower() != ".jar" or not jp.is_file():
             raise AppError(422, "JAR_NOT_FOUND", f"송출 모듈 JAR 파일을 찾을 수 없습니다: {jp}")
         body.uplink_jar = str(jp)
-    if body.vs_model and body.vs_model.lower().startswith("omnivoice"):
-        raise AppError(422, "VS_MODEL_NONCOMMERCIAL", "OmniVoice 는 비상업용 라이선스라 회사 업무에 쓸 수 없습니다(cosyvoice 등 사용)")
     for field, key in (("uplink_jar", "AICC_UPLINK_JAR"), ("tx_adb_target", "AICC_TX_ADB_TARGET"), ("tx_rate", "AICC_TX_RATE"),
                        ("tx_channels", "AICC_TX_CHANNELS"), ("tx_start_cmd", "AICC_TX_START_CMD"),
                        ("vs_url", "AICC_VS_URL"), ("vs_model", "AICC_VS_MODEL"), ("vs_voice", "AICC_VS_VOICE"),

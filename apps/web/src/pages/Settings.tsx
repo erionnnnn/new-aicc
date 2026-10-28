@@ -428,10 +428,10 @@ function PilotPanel({ me }: { me: Me }) {
           </div>
           <h3>VoiceStudio(이 PC 무료 음성 프로그램)</h3>
           <p className="muted small">VoiceStudio 에서 만든 목소리 프로필 이름을 넣으면 ‘안내 음성 &gt; VoiceStudio로 전체 만들기’와 통화 중 AI 답이 그 목소리로 나옵니다.
-            OmniVoice 모델은 비상업용이라 쓸 수 없습니다(voxcpm2·cosyvoice 권장).</p>
+            모델 라이선스는 사용 전 회사 기준으로 확인하세요.</p>
           <div className="grid4">
             <Field label="주소"><input name="vsurl" defaultValue={a.vs_url} placeholder="http://127.0.0.1:3900" /></Field>
-            <Field label="모델"><input name="vsmodel" defaultValue={a.vs_model} placeholder="voxcpm2" /></Field>
+            <Field label="모델"><input name="vsmodel" defaultValue={a.vs_model} placeholder="omnivoice" /></Field>
             <Field label="여성 목소리 프로필 이름"><input name="vsvoice" defaultValue={a.vs_voice} placeholder="aicc_female" /></Field>
             <Field label="남성 목소리 프로필 이름"><input name="vsvoicem" defaultValue={a.vs_voice_male} placeholder="aicc_male" /></Field>
           </div>

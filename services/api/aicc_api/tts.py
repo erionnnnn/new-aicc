@@ -133,7 +133,7 @@ def voice_tag(pack_key: str, engine: str = "gemini") -> str:
 
 # ---------------- VoiceStudio(이 PC 에 설치한 무료 로컬 음성 프로그램) ----------------
 # OpenAI 호환 주소 POST {url}/v1/audio/speech (VoiceStudio backend/api/routers/openai_compat.py, 2026-10-28 확인)
-# 기본 모델 OmniVoice 는 가중치가 비상업용(CC-BY-NC)이라 쓰지 않는다. 한국어·Apache-2.0 후보: cosyvoice, qwen3-tts 등.
+# 모델 라이선스(예: OmniVoice 가중치 CC-BY-NC)는 회사가 판단한다 — 2026-10-28 사용자: 담당자와 협의 완료, OmniVoice 사용.
 def vs_config(pack_key: str = "female") -> dict:
     import os
     env = {}
@@ -144,7 +144,7 @@ def vs_config(pack_key: str = "female") -> dict:
         pass
     g = lambda k, d="": (env.get(k) or os.environ.get(k) or d).strip()  # noqa: E731
     voice = g("AICC_VS_VOICE_MALE") if pack_key == "male" else g("AICC_VS_VOICE")
-    return {"url": g("AICC_VS_URL", "http://127.0.0.1:3900").rstrip("/"), "model": g("AICC_VS_MODEL", "cosyvoice"),
+    return {"url": g("AICC_VS_URL", "http://127.0.0.1:3900").rstrip("/"), "model": g("AICC_VS_MODEL", "omnivoice"),
             "voice": voice or "default", "instruct": g("AICC_VS_INSTRUCT")}
 
 
@@ -168,8 +168,6 @@ def set_pack_engine(pack_key: str, engine: str) -> None:
 def synth_voicestudio(text: str, pack_key: str) -> bytes:  # pragma: no cover - 로컬 프로그램 필요
     import httpx
     c = vs_config(pack_key)
-    if c["model"].lower() in ("omnivoice", "omnivoice-gguf"):
-        raise TTSError("OmniVoice 모델은 비상업용 라이선스라 회사 업무에 쓸 수 없습니다. 설정에서 cosyvoice 등으로 바꾸세요")
     body = {"model": c["model"], "input": text, "voice": c["voice"], "response_format": "wav", "language": "ko"}
     if c["instruct"]:
         body["instructions"] = c["instruct"]  # 별도 칸으로 전달(문장에 섞지 않음 → 지시문을 읽어 버리는 문제 없음)
