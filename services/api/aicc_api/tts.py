@@ -147,7 +147,7 @@ def vs_config(pack_key: str = "female") -> dict:
         pass
     g = lambda k, d="": (env.get(k) or os.environ.get(k) or d).strip()  # noqa: E731
     voice = g("AICC_VS_VOICE_MALE") if pack_key == "male" else g("AICC_VS_VOICE")
-    return {"url": g("AICC_VS_URL", "http://127.0.0.1:3900").rstrip("/"), "model": g("AICC_VS_MODEL", "moss-tts-nano"),
+    return {"url": g("AICC_VS_URL", "http://127.0.0.1:3900").rstrip("/"), "model": g("AICC_VS_MODEL", "moss-tts-nano").lower(),
             "voice": voice or "default", "instruct": g("AICC_VS_INSTRUCT")}
 
 
