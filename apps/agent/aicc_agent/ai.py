@@ -213,9 +213,14 @@ class GeminiTTSAI(ExceptionAI):  # pragma: no cover - 외부 API
             if not text:
                 raise RuntimeError(err or "빈 답")
             text = limit_sentences(text)
-            from aicc_api.tts import synth_gemini
+            from aicc_api import tts
             pack = "male" if self.voice == "Charon" else "female"
-            wav = synth_gemini(text, pack, self.api_key)
+            # 안내 음원을 VoiceStudio 로 만들었으면 AI 답도 VoiceStudio 같은 목소리로(설정에 모델이 있을 때)
+            if tts.vs_config(pack).get("model") and os.environ.get("AICC_AI_TTS_ENGINE", "") != "gemini" and \
+                    tts.pack_engine(pack) == "voicestudio":
+                wav = tts.synth_voicestudio(text, pack)
+            else:
+                wav = tts.synth_gemini(text, pack, self.api_key)
             import io
             import wave
             with wave.open(io.BytesIO(wav)) as w:

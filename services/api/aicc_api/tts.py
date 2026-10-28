@@ -1,6 +1,7 @@
 """안내 음성 자동 생성(TTS). 녹음 없이 음원팩 전체(필수 문구 + 날짜 조각)를 만든다.
 
 엔진
+- voicestudio: 이 PC 의 VoiceStudio(무료, 로컬). 상업 사용 가능한 모델(cosyvoice 등)만.
 - gemini: 기존 녹음과 같은 Gemini 목소리(여성 Aoede, 남성 Charon). 이 PC 의 Gemini 키 사용, 인터넷 필요.
 - edge: Microsoft Edge 온라인 신경망 음성(edge-tts) + miniaudio 로 16kHz 모노 WAV 변환. 인터넷 필요.
   여성 ko-KR-SunHiNeural, 남성 ko-KR-InJoonNeural. 특정 인물 목소리가 아닌 일반 합성 음성이다.
@@ -122,9 +123,81 @@ def _pin(model: str) -> None:
         pass
 
 
-def voice_tag(pack_key: str) -> str:
-    """음원 출처 표시(같은 표시 = 같은 모델·목소리·말투로 만든 음원)."""
+def voice_tag(pack_key: str, engine: str = "gemini") -> str:
+    """음원 출처 표시(같은 표시 = 같은 엔진·모델·목소리로 만든 음원 → '전체 목소리 통일'이 건너뜀)."""
+    if engine == "voicestudio":
+        c = vs_config(pack_key)
+        return f"tts:voicestudio:{c['model']}:{c['voice']}:{TTS_REV}"
     return f"tts:gemini:{pinned_model() or '?'}:{GEMINI_VOICES.get(pack_key, 'Aoede')}:{TTS_REV}"
+
+
+# ---------------- VoiceStudio(이 PC 에 설치한 무료 로컬 음성 프로그램) ----------------
+# OpenAI 호환 주소 POST {url}/v1/audio/speech (VoiceStudio backend/api/routers/openai_compat.py, 2026-10-28 확인)
+# 기본 모델 OmniVoice 는 가중치가 비상업용(CC-BY-NC)이라 쓰지 않는다. 한국어·Apache-2.0 후보: cosyvoice, qwen3-tts 등.
+def vs_config(pack_key: str = "female") -> dict:
+    import os
+    env = {}
+    try:
+        from .routers.admin import _read_agent_env
+        env = _read_agent_env()
+    except Exception:  # noqa: BLE001
+        pass
+    g = lambda k, d="": (env.get(k) or os.environ.get(k) or d).strip()  # noqa: E731
+    voice = g("AICC_VS_VOICE_MALE") if pack_key == "male" else g("AICC_VS_VOICE")
+    return {"url": g("AICC_VS_URL", "http://127.0.0.1:3900").rstrip("/"), "model": g("AICC_VS_MODEL", "cosyvoice"),
+            "voice": voice or "default", "instruct": g("AICC_VS_INSTRUCT")}
+
+
+def pack_engine(pack_key: str) -> str:
+    """안내 음원팩을 마지막으로 만든 엔진(AI 답도 같은 엔진·목소리로 읽기 위함)."""
+    try:
+        return (_model_file().parent / f"pack_engine_{pack_key}.txt").read_text(encoding="utf-8").strip()
+    except OSError:
+        return "gemini"
+
+
+def set_pack_engine(pack_key: str, engine: str) -> None:
+    try:
+        f = _model_file().parent / f"pack_engine_{pack_key}.txt"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(engine, encoding="utf-8")
+    except OSError:
+        pass
+
+
+def synth_voicestudio(text: str, pack_key: str) -> bytes:  # pragma: no cover - 로컬 프로그램 필요
+    import httpx
+    c = vs_config(pack_key)
+    if c["model"].lower() in ("omnivoice", "omnivoice-gguf"):
+        raise TTSError("OmniVoice 모델은 비상업용 라이선스라 회사 업무에 쓸 수 없습니다. 설정에서 cosyvoice 등으로 바꾸세요")
+    body = {"model": c["model"], "input": text, "voice": c["voice"], "response_format": "wav", "language": "ko"}
+    if c["instruct"]:
+        body["instructions"] = c["instruct"]  # 별도 칸으로 전달(문장에 섞지 않음 → 지시문을 읽어 버리는 문제 없음)
+    try:
+        r = httpx.post(f"{c['url']}/v1/audio/speech", json=body, timeout=180)
+    except httpx.HTTPError as e:
+        raise TTSError(f"VoiceStudio 에 연결하지 못했습니다({c['url']}). VoiceStudio 프로그램이 켜져 있는지 확인하세요 "
+                       f"({type(e).__name__})") from e
+    if r.status_code != 200:
+        try:
+            msg = r.json().get("error", {}).get("message") or r.text
+        except ValueError:
+            msg = r.text
+        raise TTSError(f"VoiceStudio 음성 생성 실패({r.status_code}): {str(msg)[:200]}")
+    data = r.content
+    if data[:4] != b"RIFF":
+        raise TTSError("VoiceStudio 가 WAV 가 아닌 응답을 보냈습니다")
+    with wave.open(io.BytesIO(data)) as w:
+        ch, sw, rate, pcm = w.getnchannels(), w.getsampwidth(), w.getframerate(), w.readframes(w.getnframes())
+    if sw != 2:
+        raise TTSError(f"VoiceStudio 음성 형식(비트 {sw * 8})을 바꿀 수 없습니다")
+    if ch > 1:
+        from array import array
+        a = array("h")
+        a.frombytes(pcm)
+        pcm = array("h", (sum(a[i:i + ch]) // ch for i in range(0, len(a), ch))).tobytes()
+    from aicc_agent.audio import resample_linear
+    return normalize_wav(_wav16k(resample_linear(pcm, rate, TARGET_RATE) if rate != TARGET_RATE else pcm))
 
 
 def _pcm24_to_wav16k(data: bytes) -> bytes:
@@ -251,6 +324,8 @@ def normalize_wav(wav16k: bytes, target_dbfs: float = -20.0, peak_dbfs: float = 
 def synthesize(engine: str, text: str, pack_key: str, *, api_key: str | None = None, model: str | None = None) -> bytes:
     if engine == "gemini":
         return synth_gemini(text, pack_key, api_key, model)
+    if engine == "voicestudio":
+        return synth_voicestudio(text, pack_key)
     if engine == "edge":
         return synth_edge(text, pack_key)
     if engine == "sapi":

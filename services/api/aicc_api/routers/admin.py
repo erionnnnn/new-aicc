@@ -206,10 +206,33 @@ def _to_wav16k(data: bytes) -> bytes:
 
 
 class TTSIn(BaseModel):
-    engine: str = Field(default="edge", pattern="^(gemini|edge|sapi|test)$")
+    engine: str = Field(default="edge", pattern="^(voicestudio|gemini|edge|sapi|test)$")
     only_missing: bool = False
     max_items: int = Field(default=0, ge=0, le=200)  # 0 = 전부. Gemini 는 분당 한도가 있어 화면이 나눠 요청한다
     unify: bool = False  # 목소리 통일: 같은 모델·목소리·말투로 만든 것이 아닌 모든 칸(기존 녹음 포함)을 다시 만든다
+
+
+@router.get("/voicestudio/status")
+def voicestudio_status(p: Principal = Depends(current_user)) -> dict:
+    """VoiceStudio 가 켜져 있는지, 쓸 수 있는 모델·목소리 목록(설정 화면 확인용)."""
+    import httpx
+
+    from .. import tts
+    require(p, "settings")
+    c = tts.vs_config()
+    out = {"url": c["url"], "model": c["model"], "voice": c["voice"], "running": False, "models": [], "voices": []}
+    try:
+        r = httpx.get(f"{c['url']}/v1/models", timeout=5)
+        out["running"] = r.status_code == 200
+        out["models"] = [m.get("id") for m in (r.json().get("data") or [])][:50] if r.status_code == 200 else []
+        v = httpx.get(f"{c['url']}/v1/audio/voices", timeout=5)
+        if v.status_code == 200:
+            j = v.json()
+            items = j.get("voices") or j.get("data") or (j if isinstance(j, list) else [])
+            out["voices"] = [(x.get("name") or x.get("id")) if isinstance(x, dict) else str(x) for x in items][:100]
+    except Exception as e:  # noqa: BLE001
+        out["error"] = type(e).__name__
+    return out
 
 
 @router.post("/voice-packs/{key}/tts")
@@ -233,7 +256,7 @@ def generate_tts(key: str, body: TTSIn, p: Principal = Depends(current_user), db
     remaining = 0
     for clip, c in m["clips"].items():
         if body.unify:
-            if c.get("file") and c.get("source") == tts.voice_tag(key):
+            if c.get("file") and c.get("source") == tts.voice_tag(key, body.engine):
                 continue  # 이미 통일된 목소리
         elif body.only_missing and c.get("file"):
             continue
@@ -252,9 +275,12 @@ def generate_tts(key: str, body: TTSIn, p: Principal = Depends(current_user), db
                 break
             continue
         c.update(_store_clip(p, key, clip, wav16k), text=text,
-                 source=tts.voice_tag(key) if body.engine == "gemini" else f"tts:{body.engine}")
+                 source=tts.voice_tag(key, body.engine) if body.engine in ("gemini", "voicestudio")
+                 else f"tts:{body.engine}")
         made += 1
     if made:
+        if body.engine in ("gemini", "voicestudio"):
+            tts.set_pack_engine(key, body.engine)  # 통화 중 AI 답도 같은 엔진·목소리로
         m["company_name"] = p.org.company_name
         m["approved_by"] = None
         vp = _new_version(db, p, key, m)
@@ -669,6 +695,9 @@ def local_agent(p: Principal = Depends(current_user)) -> dict:
         "tx_adb_target": env.get("AICC_TX_ADB_TARGET") or "", "tx_rate": env.get("AICC_TX_RATE") or "16000",
         "tx_channels": env.get("AICC_TX_CHANNELS") or "1", "tx_start_cmd": env.get("AICC_TX_START_CMD") or "",
         "has_gemini_key": bool(env.get("GEMINI_API_KEY")),  # 키 원문은 돌려주지 않는다
+        "vs_url": env.get("AICC_VS_URL") or "", "vs_model": env.get("AICC_VS_MODEL") or "",
+        "vs_voice": env.get("AICC_VS_VOICE") or "", "vs_voice_male": env.get("AICC_VS_VOICE_MALE") or "",
+        "vs_instruct": env.get("AICC_VS_INSTRUCT") or "", "ai_voice": env.get("AICC_AI_VOICE") or "",
         "status": status_file.read_text(encoding="utf-8") if status_file.is_file() else None,
         "output_devices": outputs,
     }
@@ -686,6 +715,13 @@ class LocalAgentIn(BaseModel):
     uplink_jar: str | None = Field(default=None, max_length=400)
     tx_channels: str | None = Field(default=None, pattern="^(1|2)$")
     tx_start_cmd: str | None = Field(default=None, max_length=300, pattern=r"^$|^shell [A-Za-z0-9_ ./:=\-]+$")
+    # VoiceStudio(로컬 음성 프로그램)
+    vs_url: str | None = Field(default=None, max_length=100, pattern=r"^$|^http://(127\.0\.0\.1|localhost):[0-9]{2,5}$")
+    vs_model: str | None = Field(default=None, max_length=60, pattern=r"^$|^[A-Za-z0-9_.\-]+$")
+    vs_voice: str | None = Field(default=None, max_length=80)
+    vs_voice_male: str | None = Field(default=None, max_length=80)
+    vs_instruct: str | None = Field(default=None, max_length=500)
+    ai_voice: str | None = Field(default=None, pattern="^(|tts|live)$")
 
 
 @router.put("/local-agent")
@@ -709,8 +745,13 @@ def put_local_agent(body: LocalAgentIn, p: Principal = Depends(current_user), db
         if jp.suffix.lower() != ".jar" or not jp.is_file():
             raise AppError(422, "JAR_NOT_FOUND", f"송출 모듈 JAR 파일을 찾을 수 없습니다: {jp}")
         body.uplink_jar = str(jp)
+    if body.vs_model and body.vs_model.lower().startswith("omnivoice"):
+        raise AppError(422, "VS_MODEL_NONCOMMERCIAL", "OmniVoice 는 비상업용 라이선스라 회사 업무에 쓸 수 없습니다(cosyvoice 등 사용)")
     for field, key in (("uplink_jar", "AICC_UPLINK_JAR"), ("tx_adb_target", "AICC_TX_ADB_TARGET"), ("tx_rate", "AICC_TX_RATE"),
-                       ("tx_channels", "AICC_TX_CHANNELS"), ("tx_start_cmd", "AICC_TX_START_CMD")):
+                       ("tx_channels", "AICC_TX_CHANNELS"), ("tx_start_cmd", "AICC_TX_START_CMD"),
+                       ("vs_url", "AICC_VS_URL"), ("vs_model", "AICC_VS_MODEL"), ("vs_voice", "AICC_VS_VOICE"),
+                       ("vs_voice_male", "AICC_VS_VOICE_MALE"), ("vs_instruct", "AICC_VS_INSTRUCT"),
+                       ("ai_voice", "AICC_AI_VOICE")):
         v = getattr(body, field)
         if v is not None:
             extra[key] = v

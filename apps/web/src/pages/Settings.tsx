@@ -87,10 +87,11 @@ function Voice({ me }: { me: Me }) {
       let made = 0; const failed: any[] = [];
       for (;;) {
         const r = await api.post(`/api/v1/voice-packs/${pack.key}/tts`,
-          { engine, only_missing: !unify && (onlyMissing || engine === "gemini"), unify, max_items: engine === "gemini" ? 6 : 0 });
+          { engine, only_missing: !unify && (onlyMissing || engine === "gemini"), unify,
+            max_items: engine === "gemini" ? 6 : engine === "voicestudio" ? 4 : 0 });
         made += r.generated; failed.push(...r.failed);
         packs.reload();
-        if (engine !== "gemini" || !r.remaining || r.generated === 0) break;
+        if ((engine !== "gemini" && engine !== "voicestudio") || !r.remaining || r.generated === 0) break;
         setTtsMsg(`진행 중: ${made}개 생성, 남은 ${r.remaining}개…`);
       }
       setTtsMsg(failed.length ? `일부 실패: ${made}개 생성, ${failed.length}개 실패(${failed[0].error})` : `완료: ${made}개 생성. 들어 보고 승인하세요.`);
@@ -140,6 +141,18 @@ function Voice({ me }: { me: Me }) {
           <p className="muted small">‘김태희 실장’은 업무상 안내 역할 이름입니다. 특정 인물의 목소리를 흉내 내지 않고 승인된 녹음만 사용합니다. 녹음 파일은 WAV·MP3·FLAC 을 올리면 자동 변환됩니다.</p>
           {admin && (
             <div className="panel tts-box">
+              <h3>VoiceStudio 로 만들기(무료·이 PC)</h3>
+              <p className="muted small">설정 &gt; 단말 &gt; 이 PC 에이전트에 VoiceStudio 모델·목소리 프로필을 넣은 뒤 누르세요. 모든 안내를 같은 목소리로 다시 만들고, 통화 중 AI 답도 같은 목소리로 읽습니다.</p>
+              <div className="toolbar">
+                <button className="btn primary" disabled={busy} onClick={() => tts("voicestudio", false, true)}>
+                  {busy ? "만드는 중…" : "VoiceStudio로 전체 만들기"}
+                </button>
+                <button className="btn ghost" disabled={busy} onClick={() => run(async () => {
+                  const r = await api.get<any>("/api/v1/voicestudio/status");
+                  setTtsMsg(r.running ? `완료: VoiceStudio 연결됨(${r.url}) · 모델 ${r.model} · 목소리 ${r.voice}${r.voices.length ? ` · 프로필: ${r.voices.slice(0, 10).join(", ")}` : ""}`
+                                      : `VoiceStudio 에 연결되지 않습니다(${r.url}) — 프로그램이 켜져 있는지 확인하세요`);
+                })}>연결 확인</button>
+              </div>
               <h3>기존 프로그램 녹음 가져오기</h3>
               <p className="muted small">기존 프로그램의 recordings 폴더 zip(OPENING.wav, ASK_PAY.wav … / 남성은 _MALE)을 올리면 안내 자리와 상황 응답(급여·병원 질문, 운전 중 등)에 자동 배정하고,
                 ACK_CONTINUE 앞의 ‘네,’를 잘라 맞장구로 씁니다. 그다음 녹음이 없는 칸(근무 여부 질문, 날짜 재확인, 날짜 조각 등)을 같은 Gemini 목소리({pack.key === "female" ? "Aoede" : "Charon"})로 채우세요.</p>
@@ -345,6 +358,9 @@ function PilotPanel({ me }: { me: Me }) {
         whisper_model: f.get("wmodel"), tx_device: f.get("tx") ?? "", gemini_model: f.get("gmodel") ?? "",
         uplink_jar: String(f.get("jar") ?? "").trim(), tx_adb_target: String(f.get("txt") ?? "").trim(), tx_rate: f.get("txr"), tx_channels: f.get("txc"),
         tx_start_cmd: String(f.get("txs") ?? "").trim(),
+        vs_url: String(f.get("vsurl") ?? "").trim(), vs_model: String(f.get("vsmodel") ?? "").trim(),
+        vs_voice: String(f.get("vsvoice") ?? "").trim(), vs_voice_male: String(f.get("vsvoicem") ?? "").trim(),
+        vs_instruct: String(f.get("vsinst") ?? "").trim(),
         ...(keyChanged ? { gemini_api_key: key } : {}),
       });
       setMsg("에이전트 설정을 저장했습니다. 몇 초 뒤 에이전트가 다시 시작됩니다."); la.reload();
@@ -410,6 +426,16 @@ function PilotPanel({ me }: { me: Me }) {
               <label className="inline"><input type="checkbox" name="gclear" /> 저장된 Gemini 키 삭제</label>
             )}
           </div>
+          <h3>VoiceStudio(이 PC 무료 음성 프로그램)</h3>
+          <p className="muted small">VoiceStudio 에서 만든 목소리 프로필 이름을 넣으면 ‘안내 음성 &gt; VoiceStudio로 전체 만들기’와 통화 중 AI 답이 그 목소리로 나옵니다.
+            OmniVoice 모델은 비상업용이라 쓸 수 없습니다(voxcpm2·cosyvoice 권장).</p>
+          <div className="grid4">
+            <Field label="주소"><input name="vsurl" defaultValue={a.vs_url} placeholder="http://127.0.0.1:3900" /></Field>
+            <Field label="모델"><input name="vsmodel" defaultValue={a.vs_model} placeholder="voxcpm2" /></Field>
+            <Field label="여성 목소리 프로필 이름"><input name="vsvoice" defaultValue={a.vs_voice} placeholder="aicc_female" /></Field>
+            <Field label="남성 목소리 프로필 이름"><input name="vsvoicem" defaultValue={a.vs_voice_male} placeholder="aicc_male" /></Field>
+          </div>
+          <Field label="말투 지시(선택, 문장과 따로 전달)"><input name="vsinst" defaultValue={a.vs_instruct} placeholder="차분하고 따뜻한 상담원 말투, 조금 느리게" /></Field>
           <p className="muted small">키가 없으면 예외 질문은 ‘상담 요청’으로 넘기고 날짜는 저장하지 않습니다. 키는 이 PC의 .aicc 폴더에만 저장되며 화면에 다시 표시하지 않습니다.</p>
           <div className="actions"><button className="btn">에이전트 설정 저장</button></div>
         </form>
