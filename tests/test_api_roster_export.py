@@ -270,3 +270,22 @@ def test_import_legacy_recordings_zip(admin):
     assert r.status_code == 200 and "closing" in r.json()["imported"]
     r = admin.post("/api/v1/voice-packs/female/refresh-texts")
     assert r.status_code == 200 and r.json()["changed"] == []  # 이미 최신
+
+
+def test_import_script_named_recordings(admin):
+    import io as _io
+    import zipfile
+    admin.get("/api/v1/voice-packs")
+    admin.put("/api/v1/settings", json={"company_name": "좋은간병"})
+    buf = _io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("새녹음/001_opening.wav", _wav([(500, 6000)]))
+        z.writestr("새녹음/045_month_10.wav", _wav([(300, 6000)]))
+        z.writestr("새녹음/080_sc_ask_pay.wav", _wav([(500, 6000)]))
+        z.writestr("새녹음/001_opening_MALE.wav", _wav([(500, 6000)]))
+    r = admin.c.post("/api/v1/voice-packs/female/import-legacy", files={"file": ("rec.zip", buf.getvalue())},
+                     headers=admin._h())
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert {"opening", "month_10", "sc_ask_pay"} <= set(out["imported"])
+    assert out["clips"]["opening"]["has_file"] and out["clips"]["opening"]["text"].startswith("안녕하세요, 선생님")

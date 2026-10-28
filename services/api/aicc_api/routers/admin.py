@@ -343,9 +343,26 @@ async def import_legacy(key: str, file: UploadFile = File(...), p: Principal = D
         raise AppError(422, "ZIP_EMPTY", "zip 안에 이 목소리용 WAV 가 없습니다(여성: OPENING.wav, 남성: OPENING_MALE.wav 형식)")
     m = with_optional(cur.manifest)
     imported, missing, regen = [], [], []
+    # 새 녹음(대본표 파일명 '001_opening.wav', '045_month_10.wav' …): 칸 이름으로 바로 배정, 지금 문구로 표시
+    from aicc_core.scenarios import CURRENT_TEXTS
+    from aicc_core.voicepack import DEFAULT_SCRIPTS
+    for stem, fname in list(files.items()):
+        mm = re.fullmatch(r"\d{1,3}_([A-Z0-9_]+)", stem)
+        if not mm:
+            continue
+        clip = mm.group(1).lower()
+        if clip not in m["clips"]:
+            continue
+        text = CURRENT_TEXTS.get(clip) or m["clips"][clip].get("text") or DEFAULT_SCRIPTS.get(clip, "")
+        text = _apply_company(text, p.org.company_name.strip())
+        m["clips"][clip].update(_store_clip(p, key, clip, _to_wav16k(zf.read(fname))), text=text, source="recorded:script")
+        imported.append(clip)
+    newly = set(imported)
     plan = [(clip, code, text) for clip, (code, text) in LEGACY_MAP.items()]
     plan += [(sc.key, sc.code, sc.text) for sc in SCENARIOS]
     for clip, code, text in plan:
+        if clip in newly:
+            continue  # 새 녹음이 우선
         if honorific(text) != text:
             # 호칭이 '선생님'으로 바뀐 문구: 기존 녹음('간병사님')은 쓰지 않고 같은 목소리로 다시 만든다
             if m["clips"][clip].get("text") != honorific(text) or m["clips"][clip].get("file"):
@@ -358,7 +375,7 @@ async def import_legacy(key: str, file: UploadFile = File(...), p: Principal = D
         wav16k = _to_wav16k(zf.read(files[code]))
         m["clips"][clip].update(_store_clip(p, key, clip, wav16k), text=text, source=f"legacy:{code}")
         imported.append(clip)
-    if ACK_SOURCE in files:
+    if ACK_SOURCE in files and "ack" not in newly:
         ack = _cut_leading_ack(_to_wav16k(zf.read(files[ACK_SOURCE])))
         if ack:
             m["clips"]["ack"].update(_store_clip(p, key, "ack", ack), text="네,", source=f"legacy:{ACK_SOURCE}:cut")
