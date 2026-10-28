@@ -252,3 +252,16 @@ def test_voicebank_prefers_full_date_sentence_and_variants():
 def test_script_counts():
     from aicc_core.voicepack import END_ACK_KEYS, FULL_CONFIRM_KEYS
     assert len(FULL_CONFIRM_KEYS) == 366 and len(END_ACK_KEYS) == 366 and "confirm_02_29" in FULL_CONFIRM_KEYS
+
+
+def test_voice_script_in_repo_matches_code():
+    import json
+    import subprocess
+    import sys
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    before = (root / "docs/voice/aicc_voice_script_female.json").read_text(encoding="utf-8")
+    subprocess.run([sys.executable, str(root / "scripts/make_voice_script.py")], check=True, capture_output=True)
+    after = (root / "docs/voice/aicc_voice_script_female.json").read_text(encoding="utf-8")
+    assert before == after, "문구가 바뀌었으면 scripts/make_voice_script.py 를 실행해 대본을 갱신하세요"
+    assert len(json.loads(after)) == 855
