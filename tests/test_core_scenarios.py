@@ -191,3 +191,15 @@ def test_honorific_is_seonsaengnim():
     from aicc_core.scenarios import CURRENT_TEXTS
     assert all("간병사님" not in t for t in CURRENT_TEXTS.values())
     assert CURRENT_TEXTS["opening"].startswith("안녕하세요, 선생님")
+
+
+def test_anytime_and_review_closings_when_recorded():
+    d = D(clips=ALL | {"closing_anytime", "closing_review"})
+    d.say("네")
+    assert d.say("언제든 가능해요") == ["closing_anytime"]
+    d = D(clips=ALL | {"closing_anytime", "closing_review"})
+    d.say("네")
+    d.say("지금 근무 중이에요")
+    assert d.say("11월 8일에 끝나요") == ["sc_work_end_date"]
+    play = [a for a in d.actions if isinstance(a, Play)][-1]
+    assert play.params["month"] == 11 and play.params["day"] == 8

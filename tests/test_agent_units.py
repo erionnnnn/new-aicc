@@ -233,3 +233,22 @@ def test_google_stt_falls_back_to_pc_on_failure():
     r = stt.transcribe([Frame(b"\x00" * 640, 0, mock_text="네 맞아요")])
     assert r.text == "네 맞아요" and "대신" in r.engine and stt.last_error
     stt.end_call()
+
+
+def test_voicebank_prefers_full_date_sentence_and_variants():
+    from aicc_agent.runner import VoiceBank
+    from aicc_core.flow import Play
+    clips = {"confirm_date": {"file": "x"}, "month_10": {"file": "x"}, "day_28": {"file": "x"},
+             "confirm_10_28": {"file": "x"}, "sc_work_end_date": {"file": "x"}, "endack_11_08": {"file": "x"},
+             "ask_available_date": {"file": "x"}, "ask_available_date__v2": {"file": "x"}}
+    vb = VoiceBank({"clips": clips}, lambda k: None, False)
+    assert vb.render(Play("confirm_date", 1, {"month": 10, "day": 28})) == ["confirm_10_28"]
+    assert vb.render(Play("confirm_date", 1, {"month": 10, "day": 29})) == ["month_10", "day_29", "confirm_date"]
+    assert vb.render(Play("sc_work_end_date", 1, {"month": 11, "day": 8})) == ["endack_11_08"]
+    seen = {vb.render(Play("ask_available_date", 1))[0] for _ in range(60)}
+    assert seen == {"ask_available_date", "ask_available_date__v2"}  # 녹음된 다른 표현만 섞어 씀
+
+
+def test_script_counts():
+    from aicc_core.voicepack import END_ACK_KEYS, FULL_CONFIRM_KEYS
+    assert len(FULL_CONFIRM_KEYS) == 366 and len(END_ACK_KEYS) == 366 and "confirm_02_29" in FULL_CONFIRM_KEYS

@@ -385,7 +385,7 @@ class CallFlow:
             if n >= self.max_reprompt:
                 self.obs.confirmation_state = "RANGE"
                 self.review_reasons.append("DATE_RANGE_ONLY")
-                return [self._play("closing"), HangUp("range"), *self._end("UNCONFIRMED")]
+                return [self._play(self._review_close()), HangUp("range"), *self._end("UNCONFIRMED")]
             return self._reprompt(it, same_question=True)
         if it.intent == "UNKNOWN_DATE":
             if self.obs.work_status == "WORKING" and self.obs.end_date is None:
@@ -395,7 +395,7 @@ class CallFlow:
             self.obs.confirmation_state = "UNKNOWN"
             self.obs.available_text = it.text
             self.review_reasons.append("DATE_UNKNOWN")
-            return [self._play("closing"), HangUp("unknown"), *self._end("UNCONFIRMED")]
+            return [self._play(self._review_close()), HangUp("unknown"), *self._end("UNCONFIRMED")]
         return self._reprompt(it)
 
     def _on_confirm_date(self, it: Interpretation, eid: str) -> list[Action]:
@@ -412,7 +412,7 @@ class CallFlow:
                                          "to": new.value.isoformat() if new.value else None, "event_id": eid})
                 if self.corrections > self.max_corrections:
                     self.review_reasons.append("TOO_MANY_CORRECTIONS")
-                    return [self._play("closing"), HangUp("corrections"), *self._end("UNCONFIRMED")]
+                    return [self._play(self._review_close()), HangUp("corrections"), *self._end("UNCONFIRMED")]
                 return self._candidate(new, it, eid)
             if new and new.value == cand:
                 # 같은 날짜를 다시 말했지만 명시적 동의어가 없음 → 다시 확인
@@ -512,6 +512,10 @@ class CallFlow:
         self.state = "WAIT_AVAILABILITY"
         return [*extra, play]
 
+    def _review_close(self) -> str:
+        """날짜 없이 끝낼 때: '말씀하신 날짜부터 반영' 문구는 맞지 않으므로 담당자 확인 마무리(녹음 있을 때)."""
+        return "closing_review" if self._has("closing_review") else "closing"
+
     def _after_end(self, it: Interpretation, eid: str) -> list[Action]:
         """종료일을 들은 뒤: 다음 일정을 모른다고 했으면 기록 후 마무리, 아니면 '그다음엔 언제부터?'"""
         if any(m.kind == "UNKNOWN" for m in it.dates):
@@ -524,7 +528,10 @@ class CallFlow:
         nxt = BY_CODE["WORK_END_DATE"].key
         if self._has(nxt):
             self.state = "ASK_AVAILABLE_DATE"
-            return [self._play(nxt)]  # "네, 확인했습니다. 그다음에는 언제부터 근무 가능하실까요?"
+            d = self.obs.end_date
+            params = {"date": d.isoformat(), "month": d.month, "day": d.day} if d else {}
+            # 런너가 'N월 N일까지 근무하시는군요…' 통문장 녹음이 있으면 그걸, 없으면 일반 문장을 튼다
+            return [self._play(nxt, params)]
         return self._go("ASK_AVAILABLE_DATE")
 
     def _end_unknown(self, it: Interpretation) -> list[Action] | None:
@@ -590,7 +597,8 @@ class CallFlow:
         self.obs.available_text = it.text
         self.obs.history.append({"event": "ANYTIME", "text": it.text})
         self.state = "CLOSING"
-        return [self._play("closing"), HangUp("anytime"), *self._end("ANYTIME")]
+        key = "closing_anytime" if self._has("closing_anytime") else "closing"
+        return [self._play(key), HangUp("anytime"), *self._end("ANYTIME")]
 
     def _exception(self, text: str) -> list[Action]:
         if self.ai_count >= self.max_ai:

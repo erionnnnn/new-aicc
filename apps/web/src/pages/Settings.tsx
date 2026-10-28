@@ -201,7 +201,7 @@ function Voice({ me }: { me: Me }) {
           <table className="table compact">
             <thead><tr><th>키</th><th>문구</th><th>녹음</th><th /></tr></thead>
             <tbody>
-              {[...pack.required_keys, ...(pack.optional_keys ?? [])].map((k: string) => {
+              {[...pack.required_keys, ...(pack.optional_keys ?? []).filter((k: string) => !/^(confirm|endack)_\d/.test(k))].map((k: string) => {
                 const c = pack.clips[k] ?? {};
                 return (
                   <tr key={k}>
@@ -221,6 +221,10 @@ function Voice({ me }: { me: Me }) {
               })}
             </tbody>
           </table>
+          <p className="muted small">날짜 통문장 녹음(‘10월 28일부터 근무 가능하신 게 맞으실까요?’ 366개, ‘11월 8일까지 근무하시는군요…’ 366개):
+            {" "}{(pack.optional_keys ?? []).filter((k: string) => /^confirm_\d/.test(k) && pack.clips[k]?.has_file).length}/366,
+            {" "}{(pack.optional_keys ?? []).filter((k: string) => /^endack_\d/.test(k) && pack.clips[k]?.has_file).length}/366 녹음됨.
+            없으면 아래 조각을 이어 붙여 말합니다.</p>
           <p className="muted small">날짜 재확인용 조각 음원 {pack.date_piece_keys.length}개(1월~12월, 1일~31일)도 필요합니다. 현재 녹음 없는 항목 {pack.missing_count}개.</p>
         </>
       )}

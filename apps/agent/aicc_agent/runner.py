@@ -28,7 +28,7 @@ from aicc_core.flow import (
     StopTx,
 )
 from aicc_core.scenarios import SCENARIO_KEYS
-from aicc_core.voicepack import confirm_date_sequence
+from aicc_core.voicepack import confirm_date_sequence, variants_of
 
 from .ai import ExceptionAI, build_prompt
 from .audio import EnergyVAD, read_wav_mono16, rms, split_frames, tone
@@ -101,9 +101,21 @@ class VoiceBank:
         return bool(((self.manifest.get("clips") or {}).get(key) or {}).get("file"))
 
     def render(self, play: Play) -> list[str]:
+        """재생할 녹음 목록. 날짜 문장은 통문장 녹음이 있으면 그것(자연스러움), 없으면 조각을 잇는다.
+        같은 상황의 다른 표현(__v2 …)이 녹음돼 있으면 그중 하나를 고른다(같은 말 반복 방지)."""
+        import random
+        m, d = play.params.get("month"), play.params.get("day")
         if play.key == "confirm_date":
-            return confirm_date_sequence(int(play.params["month"]), int(play.params["day"]))
-        return [play.key]
+            full = f"confirm_{int(m):02d}_{int(d):02d}"
+            if self.has(full):
+                return [full]
+            return confirm_date_sequence(int(m), int(d))
+        if play.key == "sc_work_end_date" and m and d:
+            full = f"endack_{int(m):02d}_{int(d):02d}"
+            if self.has(full):
+                return [full]
+        options = [k for k in (play.key, *variants_of(play.key)) if k == play.key or self.has(k)]
+        return [random.choice(options)]
 
 
 class CallRunner:
@@ -257,7 +269,8 @@ class CallRunner:
     def _preload_list(self) -> list[str]:
         if self.is_mock or not hasattr(self.device, "tx_preload"):
             return []
-        return [k for k in PRELOAD_KEYS if self.voice.has(k)]
+        keys = [k for base in PRELOAD_KEYS for k in (base, *variants_of(base))]
+        return [k for k in keys if self.voice.has(k)]
 
     def _preload_next(self) -> None:
         """신호가 가는 동안 고정 안내를 휴대폰에 미리 올려 둔다(재생 시작 지연 단축). 실패해도 통화는 계속."""

@@ -23,7 +23,52 @@ REQUIRED_KEYS = (
 # 선택 음원: 없어도 실통화 가능.
 # - ack: 상대가 말을 마치면 인식 전에 바로 내는 짧은 맞장구("네,")
 # - sc_*: 기존 녹음 상황 응답(급여·병원 질문, 선호 조건, 운전 중 등 — scenarios.py)
-OPTIONAL_KEYS = ("ack",) + SCENARIO_KEYS
+import calendar as _cal
+
+# 날짜 문장 통째 녹음(통화 중 생성·추정 없이 미리 녹음한 고정 문장, 2026-10-28 사용자 요청 '최대한 많은 스크립트')
+#  - confirm_MM_DD : "10월 28일부터 근무 가능하신 게 맞으실까요?"  → 있으면 조각 이어 붙이기 대신 사용
+#  - endack_MM_DD  : "11월 8일까지 근무하시는군요. 그다음에는 언제부터 근무 가능하실까요?"
+_ALL_DAYS = [(m, d) for m in range(1, 13) for d in range(1, _cal.monthrange(2024, m)[1] + 1)]  # 윤년 기준 366일
+FULL_CONFIRM_KEYS = tuple(f"confirm_{m:02d}_{d:02d}" for m, d in _ALL_DAYS)
+END_ACK_KEYS = tuple(f"endack_{m:02d}_{d:02d}" for m, d in _ALL_DAYS)
+# 같은 상황의 다른 표현(매번 같은 말만 반복하면 기계처럼 들림) — 녹음된 것 중 무작위로 고른다
+VARIANT_TEXTS = {
+    "opening__v2": "안녕하세요, 선생님. 좋은간병입니다. 다음 근무 일정 확인차 연락드렸어요.",
+    "ask_available_date__v2": "네, 그럼 다음 근무는 언제부터 가능하세요?",
+    "ask_available_date__v3": "네, 선생님. 언제부터 근무하실 수 있으세요?",
+    "ask_end_date__v2": "아, 지금 일하고 계시는군요. 지금 근무는 언제쯤 끝나세요?",
+    "ask_repeat__v2": "죄송해요, 제가 잘 못 들었어요. 한 번만 다시 말씀해 주시겠어요?",
+    "ask_repeat__v3": "네? 다시 한 번 말씀해 주실 수 있을까요?",
+    "closing__v2": "네, 확인 감사합니다. 말씀하신 날짜로 반영해둘게요. 좋은 하루 보내세요.",
+    "callback__v2": "네, 괜찮습니다. 편하실 때 다시 연락드릴게요. 감사합니다.",
+    "wrong_person__v2": "아, 죄송합니다. 번호를 잘못 알고 연락드렸네요. 좋은 하루 보내세요.",
+    "ai_wait__v2": "네, 잠시만요.",
+    "ai_wait__v3": "아, 잠깐만요. 확인해 볼게요.",
+    "sc_work_end_date__v2": "네, 알겠습니다. 그 다음 근무는 언제부터 가능하세요?",
+    "sc_silence_check__v2": "여보세요, 선생님? 제 목소리 잘 들리세요?",
+    "sc_custom_reask_date__v2": "아, 그러시군요. 그럼 언제부터 가능하실까요?",
+    "sc_why_call__v2": "선생님 다음 근무 가능하신 날을 미리 알아두면, 맞는 일감이 생길 때 바로 안내드릴 수 있어서요. "
+                       "언제부터 가능하신지만 알려주시면 돼요.",
+    "sc_custom_intro__v2": "네, 좋은간병 김태희 실장입니다. 근무 일정 확인차 연락드렸어요.",
+    "sc_emotional_hard__v2": "아이고, 많이 힘드셨겠어요, 선생님. 정말 고생 많으셨어요. 다음 근무 가능하신 날 정해지시면 알려주세요.",
+    "sc_unknown_schedule__v2": "네, 괜찮습니다. 일정 정해지시면 편하게 연락 주세요. 감사합니다.",
+}
+EXTRA_TEXTS = {
+    "closing_anytime": "네, 언제든 근무 가능하신 걸로 반영해둘게요. 조건 맞는 일감이 생기면 연락드릴게요. 감사합니다.",
+    "closing_review": "네, 말씀 감사합니다. 일정은 담당자가 한 번 더 확인해서 연락드릴게요. 좋은 하루 보내세요.",
+}
+
+
+def _md(key: str) -> tuple[int, int]:
+    _p, mm, dd = key.split("_")
+    return int(mm), int(dd)
+
+
+def variants_of(key: str) -> tuple[str, ...]:
+    return tuple(k for k in VARIANT_TEXTS if k.split("__")[0] == key)
+
+
+OPTIONAL_KEYS = ("ack",) + SCENARIO_KEYS + tuple(EXTRA_TEXTS) + tuple(VARIANT_TEXTS) + FULL_CONFIRM_KEYS + END_ACK_KEYS
 DATE_PIECE_KEYS = tuple(f"month_{m}" for m in range(1, 13)) + tuple(f"day_{d}" for d in range(1, 32))
 PLACEHOLDER_MARKERS = ("[회사명]", "PLACEHOLDER", "TODO", "자리표시자", "[이름]")
 
@@ -45,6 +90,10 @@ DEFAULT_SCRIPTS = {
     "wrong_person": "잘못 연락드려 죄송합니다. 좋은 하루 보내세요.",
     "ack": "네,",
     **{sc.key: sc.say for sc in SCENARIOS},
+    **EXTRA_TEXTS,
+    **VARIANT_TEXTS,
+    **{k: f"{_md(k)[0]}월 {_md(k)[1]}일부터 근무 가능하신 게 맞으실까요?" for k in FULL_CONFIRM_KEYS},
+    **{k: f"{_md(k)[0]}월 {_md(k)[1]}일까지 근무하시는군요. 그다음에는 언제부터 근무 가능하실까요?" for k in END_ACK_KEYS},
 }
 
 
