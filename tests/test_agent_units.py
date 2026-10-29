@@ -265,3 +265,135 @@ def test_voice_script_in_repo_matches_code():
     after = (root / "docs/voice/aicc_voice_script_female.json").read_text(encoding="utf-8")
     assert before == after, "문구가 바뀌었으면 scripts/make_voice_script.py 를 실행해 대본을 갱신하세요"
     assert len(json.loads(after)) == 855
+
+
+class _FakeLive:
+    """Live API 가짜 세션: 소리를 받다가 '끝' 신호가 오면 받아쓴 글을 돌려준다(respond=False 면 침묵)."""
+
+    def __init__(self, text="네 맞아요", respond=True, chunks=None):
+        import asyncio
+        from types import SimpleNamespace as NS
+        self.NS = NS
+        self.text, self.respond, self.chunks = text, respond, chunks
+        self.audio = bytearray()
+        self.ends = 0
+        self.q = asyncio.Queue()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        return False
+
+    async def send_realtime_input(self, audio=None, audio_stream_end=None):
+        if audio is not None:
+            self.audio.extend(audio.data)
+        if audio_stream_end:
+            self.ends += 1
+            if self.respond:
+                for i, c in enumerate(self.chunks or [self.text]):
+                    last = i == len(self.chunks or [self.text]) - 1
+                    await self.q.put(self.NS(server_content=self.NS(
+                        input_transcription=self.NS(text=c, finished=last))))
+
+    async def receive(self):
+        while True:
+            yield await self.q.get()
+
+
+def _live_stt(fake, fallback=None, end_wait=0.5):
+    import time
+
+    from aicc_agent.stt import GeminiLiveSTT
+
+    class T(GeminiLiveSTT):
+        def _connect(self):
+            return fake
+
+    s = T("k", fallback=fallback, timeout_s=0.8, end_wait_s=end_wait)
+    s.begin_call()
+    for _ in range(50):
+        if s._session is not None:
+            break
+        time.sleep(0.01)
+    return s
+
+
+def test_google_stt_streams_during_speech_and_finishes_fast():
+    import time
+
+    from aicc_agent.device import Frame
+    fake = _FakeLive(chunks=["네, ", "맞습니다."])
+    stt = _live_stt(fake)
+    frames = [Frame(b"\x01\x00" * 320, i * 20) for i in range(30)]
+    stt.stream_start()
+    for f in frames:
+        stt.stream_audio(f.pcm)
+    t0 = time.monotonic()
+    r = stt.transcribe(frames)
+    assert r.text == "네, 맞습니다." and r.engine == "gemini-live"
+    assert time.monotonic() - t0 < 0.3
+    assert len(fake.audio) == sum(len(f.pcm) for f in frames) and fake.ends == 1
+    stt.end_call()
+
+
+def test_google_stt_burst_when_not_streamed():
+    from aicc_agent.device import Frame
+    fake = _FakeLive(text="아니요")
+    stt = _live_stt(fake)
+    r = stt.transcribe([Frame(b"\x01\x00" * 320, 0)])
+    assert r.text == "아니요" and "한꺼번에" in r.engine
+    stt.end_call()
+
+
+def test_google_stt_slow_uses_parallel_fallback_without_extra_wait():
+    import time
+
+    from aicc_agent.device import Frame
+    from aicc_agent.stt import STTAdapter, SttResult
+
+    class SlowPC(STTAdapter):
+        name = "pc"
+
+        def transcribe(self, frames):
+            time.sleep(0.3)
+            return SttResult("네", True, None, 300, self.name)
+
+    fake = _FakeLive(respond=False)
+    stt = _live_stt(fake, fallback=SlowPC(), end_wait=0.5)
+    frames = [Frame(b"\x01\x00" * 320, 0)]
+    stt.stream_start()
+    stt.stream_audio(frames[0].pcm)
+    t0 = time.monotonic()
+    r = stt.transcribe(frames)
+    took = time.monotonic() - t0
+    assert r.text == "네" and "대신" in r.engine
+    assert took < 0.7, took  # 기다림(0.5) + PC 인식(0.3)이 아니라 동시에 돌아 0.5초 남짓
+    assert stt._session is not None  # 시간 초과로 연결을 끊지 않음
+    stt.end_call()
+
+
+def test_runner_streams_rx_audio_only_while_speaking():
+    from aicc_agent.audio import EnergyVAD
+    from aicc_agent.device import Frame
+    from aicc_agent.runner import CallRunner, RunnerConfig
+
+    class Rec:
+        def __init__(self):
+            self.starts, self.sent = 0, 0
+
+        def stream_start(self):
+            self.starts += 1
+
+        def stream_audio(self, pcm):
+            self.sent += 1
+
+    rec = Rec()
+    r = CallRunner(None, None, rec, None, RunnerConfig())
+    r.vad = EnergyVAD(threshold=300, end_silence_ms=200)
+    loud, quiet = b"\xe8\x03" * 320, b"\x00\x00" * 320
+    seq = [quiet] * 5 + [loud] * 10 + [quiet] * 15
+    for i, pcm in enumerate(seq):
+        r._feed_vad(Frame(pcm, i * 20))
+    assert rec.starts == 1
+    assert rec.sent == 10 + 10  # 말소리 10 + 끝 판정까지의 조용한 10(200ms), 앞뒤 침묵은 보내지 않음

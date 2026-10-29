@@ -144,7 +144,7 @@ class CallRunner:
                 p["text"] = str(p["text"])[:60]
             log.info("[통화 %s] %s %s", getattr(self, "call_id", "?")[:8], type_,
                      {k: v for k, v in p.items() if k in ("key", "text", "reason", "outcome", "date", "code",
-                                                         "stt_latency_ms", "detail", "error", "state")})
+                                                         "stt_latency_ms", "stt_engine", "detail", "error", "state")})
         self._seq += 1
         self._buf.append({"event_id": eid, "seq": self._seq, "turn_id": turn, "type": type_,
                           "occurred_at": datetime.now(timezone.utc).isoformat(), "payload": payload or {}})
@@ -345,12 +345,24 @@ class CallRunner:
         for f in frames:
             if f.pcm and f.speech:
                 self.rx_speech_frames += 1
-            for ev in self.vad.feed(f):
+            for ev in self._feed_vad(f):
                 if ev.kind == "SPEECH_START":
                     started = True
                 elif ev.kind == "SPEECH_END" and not self.flow.finished:
                     self._on_utterance(ev.frames, ev.t_ms)
         return started
+
+    def _feed_vad(self, f: Frame) -> list:
+        """VAD 에 넣고, 상대가 말하는 동안에는 소리를 인식 서버로 실시간 전송(말이 끝나면 글이 거의 다 와 있게)."""
+        evs = self.vad.feed(f)
+        start = getattr(self.stt, "stream_start", None)
+        if start is None or not f.pcm:
+            return evs
+        if any(e.kind == "SPEECH_START" for e in evs):
+            start()
+        if self.vad.in_speech or any(e.kind == "SPEECH_END" for e in evs):
+            self.stt.stream_audio(f.pcm)
+        return evs
 
     def _on_utterance(self, frames: list[Frame], vad_end_ms: int) -> None:
         self._filler(frames)
@@ -464,7 +476,7 @@ class CallRunner:
             done = self.device.tx_poll()
             rx = self._tick(self.cfg.listen_ms)
             for f in rx:
-                evs = self.vad.feed(f)
+                evs = self._feed_vad(f)
                 if f.pcm and f.speech:
                     self.rx_speech_frames += 1
                 if stopped_at is None:
