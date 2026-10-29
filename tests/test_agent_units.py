@@ -264,7 +264,7 @@ def test_voice_script_in_repo_matches_code():
     subprocess.run([sys.executable, str(root / "scripts/make_voice_script.py")], check=True, capture_output=True)
     after = (root / "docs/voice/aicc_voice_script_female.json").read_text(encoding="utf-8")
     assert before == after, "문구가 바뀌었으면 scripts/make_voice_script.py 를 실행해 대본을 갱신하세요"
-    assert len(json.loads(after)) == 1055  # 855 + 예상 질문 200(2026-10-29)
+    assert len(json.loads(after)) == 855 + len(__import__("aicc_core.faq").faq.FAQS)  # 기존 855 + 예상 질문
 
 
 class _FakeLive:

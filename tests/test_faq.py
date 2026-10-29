@@ -12,8 +12,8 @@ ALL = set(SCENARIO_KEYS)
 
 
 def test_two_hundred_unique():
-    assert len(FAQS) == 200
-    assert len({f.code for f in FAQS}) == 200
+    assert len(FAQS) >= 200
+    assert len({f.code for f in FAQS}) == len(FAQS)
     assert all(f.examples for f in FAQS)
 
 
@@ -45,7 +45,9 @@ def test_texts_follow_rules():
 def test_live_call_examples_2026_10_29():
     """실통화에서 AI 로 넘어가 침묵했던 말 → 녹음으로 즉답."""
     for text, key in (("환자분이 몇 살이에요?", "sc_faq_patient_age"),
-                      ("네, 다음에 연락드릴게요.", "sc_faq_will_call_back")):
+                      ("네, 다음에 연락드릴게요.", "sc_faq_will_call_back"),
+                      ("좋은간병 일 많아요?", "sc_faq_job_volume"),  # 2026-10-29 11:32 실통화
+                      ("여보세요? 일 언제부터 줄 수 있어요?", "sc_faq_when_job_comes")):
         f = CallFlow(REF, clips=ALL, ai_conversation=True)
         f.answered()
         f.utterance("네", turn=f.turn, event_id="y")

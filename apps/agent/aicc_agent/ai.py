@@ -20,8 +20,9 @@ SYSTEM_PROMPT = (
     "따뜻하고 짧게 대화합니다. 상대를 '선생님'이라고 부릅니다(회사 상담원 말투).\n"
     "목표: 1) 지금 간병 근무 중인지 2) 근무 중이면 언제 끝나는지 3) 다음 근무를 언제부터 할 수 있는지 알아내는 것.\n"
     "규칙:\n"
-    "- 한두 문장, 말하듯이. 매번 '네'로 시작하지 마십시오. 같은 말을 되풀이하지 마십시오.\n"
-    "- 상대 말에 먼저 자연스럽게 반응하고, 끝에 '지금 확인할 것'을 부드럽게 한 번 묻습니다.\n"
+    "- 딱 한 문장, 40자 안팎으로 짧게 말합니다(말이 길수록 상대가 오래 기다립니다). 매번 '네'로 시작하지 마십시오.\n"
+    "- 상대 말에 짧게 반응하고 같은 문장 끝에 '지금 확인할 것'을 부드럽게 묻습니다. 예: '일감은 시기마다 달라서요, 다음 근무는 언제부터 되세요?'\n"
+    "- 모르는 사실을 지어내지 마십시오. 일감이 많다·준비돼 있다·바로 드릴 수 있다, 금액·병원·환자 정보처럼 확인되지 않은 내용은 말하지 않습니다.\n"
     "- 날짜를 정하거나 '반영했다/확정했다'고 말하지 마십시오(날짜 확인은 시스템이 따로 합니다).\n"
     "- 일자리 배정·급여·병원·환자 조건은 약속하지 말고 '실제 일감 소개할 때 안내드린다'고 합니다.\n"
     "- 사람이냐고 물으면 자동 안내라고 솔직히 말합니다. 개인정보를 묻지 않습니다.\n"
@@ -130,7 +131,10 @@ class GeminiLiveAI(ExceptionAI):  # pragma: no cover - 외부 API
                                           speech_config=voice, output_audio_transcription={})
             pcm = bytearray()
             text = []
+            t_start = time.monotonic()
+            t_first = None
             async with client.aio.live.connect(model=model, config=cfg) as session:
+                t_conn = time.monotonic()
                 try:
                     await session.send_client_content(turns={"role": "user", "parts": [{"text": prompt}]},
                                                       turn_complete=True)
@@ -141,11 +145,18 @@ class GeminiLiveAI(ExceptionAI):  # pragma: no cover - 외부 API
                     if sc and sc.model_turn:
                         for part in sc.model_turn.parts:
                             if part.inline_data and part.inline_data.data:
+                                if t_first is None:
+                                    t_first = time.monotonic()
                                 pcm.extend(part.inline_data.data)
                     if sc and getattr(sc, "output_transcription", None) and sc.output_transcription.text:
                         text.append(sc.output_transcription.text)
                     if sc and sc.turn_complete:
                         break
+            import logging
+            ms = lambda a, b: int(((b or a) - a) * 1000)  # noqa: E731
+            logging.getLogger("aicc.agent").info(
+                "AI 단계(Live %s): 연결 %dms · 첫 소리 %dms · 전체 %dms · 답 길이 %.1f초",
+                model, ms(t_start, t_conn), ms(t_conn, t_first), ms(t_start, time.monotonic()), len(pcm) / 48000)
             return "".join(text), bytes(pcm)
 
         t0 = time.monotonic()
