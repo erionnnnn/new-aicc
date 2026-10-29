@@ -191,12 +191,20 @@ class CallRunner:
         self.confirm_failed = False
         self.rx_speech_frames = 0
         self.ai_wait_played = False
+        self.answered_ms = None
         try:
             self._call(claim["phone"])
         except DeviceError as e:
-            log.error("[통화 %s] 장치 오류: %s", self.call_id[:8], e)
-            self.summary.errors.append(str(e)[:200])
-            self._apply(self.flow.device_error(type(e).__name__))
+            if self._ended_by_remote(e):
+                # 2026-10-29 실전: 상대가 안내 중 끊으면 송출 모듈이 'Call audio mode ended'로 실패 →
+                # 장치 오류(캠페인 일시정지)가 아니라 상대 종료로 처리하고 다음 대상으로 넘어간다
+                log.info("[통화 %s] 상대가 통화를 끊음(송출 중): %s", self.call_id[:8], str(e)[:120])
+                self._emit("call.remote_hangup", self.flow.turn, {"during": "tx", "detail": str(e)[:200]})
+                self._apply(self.flow.remote_hangup())
+            else:
+                log.error("[통화 %s] 장치 오류: %s", self.call_id[:8], e)
+                self.summary.errors.append(str(e)[:200])
+                self._apply(self.flow.device_error(type(e).__name__))
         except ApiError as e:
             # 서버 확인 실패 시 날짜를 추정하지 않고 종료
             self.summary.errors.append(f"API {e.code}")
@@ -209,6 +217,17 @@ class CallRunner:
                 self.flow._end("UNCONFIRMED")  # noqa: SLF001 - 상태기계 종료 표시
         self._finalize()
         return self.summary
+
+    def _ended_by_remote(self, e: Exception) -> bool:
+        """받은 뒤 생긴 장치 오류가 사실은 상대가 끊어서 생긴 것인지(통화 상태 IDLE/ENDED 또는 통화 오디오 종료 메시지)."""
+        if getattr(self, "answered_ms", None) is None or self.is_mock:
+            return False
+        if "call audio mode ended" in str(e).lower():
+            return True
+        try:
+            return self.device.get_call_state().state in ("IDLE", "ENDED")
+        except Exception:  # noqa: BLE001
+            return False
 
     def _fetch_clip(self, pack_id: str, key: str) -> bytes | None:
         try:

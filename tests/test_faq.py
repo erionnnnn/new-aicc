@@ -177,3 +177,17 @@ def test_end_date_clarify_keeps_end_question():
     f.utterance("지금 근무 중이에요", turn=f.turn, event_id="w")
     f.utterance("언제 끝나냐고요?", turn=f.turn, event_id="q")
     assert f.state == "ASK_END_DATE"  # 다음 답('다음 주 금요일요')을 종료일로 받는다
+
+
+@pytest.mark.parametrize("text,key,outcome", [
+    ("여보세요? 예. 아, 제가 지금 다리 수술해서 못 해요.", "sc_faq_surgery_self", "UNCONFIRMED"),
+    ("예, 나중에 전화드릴게요.", "sc_faq_will_call_back", "CALLBACK_REQUESTED"),
+    ("연락드려도 지금 제가 애를 보니까 아무 일도 못 하고 있어요.", "sc_faq_not_decided_family", "UNCONFIRMED"),
+])
+def test_live_campaign_2026_10_29_17h(text, key, outcome):
+    """실전 첫 캠페인(2026-10-29 17시) 실제 발화."""
+    f = CallFlow(REF, clips=ALL, ai_conversation=True)
+    f.answered()
+    f.utterance("예", turn=f.turn, event_id="y")
+    acts = f.utterance(text, turn=f.turn, event_id="x")
+    assert [a.key for a in acts if isinstance(a, Play)] == [key] and f.outcome == outcome

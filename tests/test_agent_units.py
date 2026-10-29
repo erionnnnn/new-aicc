@@ -397,3 +397,26 @@ def test_runner_streams_rx_audio_only_while_speaking():
         r._feed_vad(Frame(pcm, i * 20))
     assert rec.starts == 1
     assert rec.sent == 10 + 10  # 말소리 10 + 끝 판정까지의 조용한 10(200ms), 앞뒤 침묵은 보내지 않음
+
+
+def test_tx_failure_after_remote_hangup_is_not_device_error():
+    """2026-10-29 실전: 상대가 안내 중 끊으면 송출 모듈이 'Call audio mode ended' → 캠페인이 장치 오류로 멈춤."""
+    from aicc_agent.device import CallStatus, DeviceError
+    from aicc_agent.runner import CallRunner, RunnerConfig
+
+    class Dev:
+        state = "ACTIVE"
+
+        def get_call_state(self):
+            return CallStatus(self.state, {})
+
+    d = Dev()
+    r = CallRunner(None, d, None, None, RunnerConfig())
+    r.is_mock = False
+    r.answered_ms = None
+    assert not r._ended_by_remote(DeviceError("x"))  # 받기 전 오류는 장치 오류
+    r.answered_ms = 1000
+    assert r._ended_by_remote(DeviceError("송출 모듈 실행 실패(코드 1): IllegalStateException: Call audio mode ended"))
+    assert not r._ended_by_remote(DeviceError("USB 끊김"))
+    d.state = "IDLE"
+    assert r._ended_by_remote(DeviceError("USB 끊김"))  # 통화가 이미 끝났으면 상대 종료

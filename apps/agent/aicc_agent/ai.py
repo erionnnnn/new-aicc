@@ -240,7 +240,7 @@ class GeminiTTSAI(ExceptionAI):  # pragma: no cover - 외부 API
         def work() -> tuple[str, bytes]:
             from google import genai
             from google.genai import types
-            client = genai.Client(api_key=self.api_key, http_options=types.HttpOptions(timeout=5000))
+            client = genai.Client(api_key=self.api_key)  # 시간 제한은 아래 작업 전체 timeout 으로(API 최소 deadline 10초라 5초 지정 시 400 오류, 2026-10-29)
             cfg = types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT, max_output_tokens=120, temperature=0.6)
             text, err = "", ""
             for m in [x for x in dict.fromkeys((self._ok_model, os.environ.get("AICC_GEMINI_TEXT_MODEL"), *TEXT_MODELS)) if x]:
