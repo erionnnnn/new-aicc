@@ -116,3 +116,16 @@ def test_callback_requests_with_date_words_are_not_dates(text, key):
     f.answered()
     acts = f.utterance(text, turn=f.turn, event_id="t")
     assert [a.key for a in acts if isinstance(a, Play)] == [key] and f.outcome == "CALLBACK_REQUESTED"
+
+
+@pytest.mark.parametrize("prev", [[], ["네"], ["네", "지금 일 안 해요"]])
+def test_clarifying_questions_answered_by_recording(prev):
+    """2026-10-29 실통화: '어떤 근무요?', '언제부터요?' 에 반응 못 함(AI 로 넘어가거나 AI 대기 중 무시)."""
+    for text, key in (("어떤 근무요?", "sc_faq_which_work"), ("언제부터요?", "sc_faq_clarify_when")):
+        f = CallFlow(REF, clips=ALL, ai_conversation=True)
+        f.answered()
+        for i, p in enumerate(prev):
+            acts = f.utterance(p, turn=f.turn, event_id=f"p{i}")
+            assert not any(isinstance(a, StartAI) for a in acts), p  # '지금 일 안 해요'도 AI 로 가지 않음
+        acts = f.utterance(text, turn=f.turn, event_id="q")
+        assert [a.key for a in acts if isinstance(a, Play)] == [key], (prev, text)

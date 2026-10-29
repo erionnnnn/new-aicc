@@ -381,8 +381,13 @@ class CallFlow:
                 return self._after_end(it, eid)
             return self._go("ASK_END_DATE")
         if it.intent == "NOT_WORKING" and not self._pick(it, "START"):
+            # '지금 일 안 해요'는 AI 에 넘길 말이 아니다 → 바로 '그럼 다음 근무는 언제부터…'(녹음) 2026-10-29 실통화
             self.obs.work_status = "NOT_WORKING"
-            return self._reprompt(it, same_question=True)
+            n = self.reprompts.get(self.state, 0)
+            if n >= self.max_reprompt:
+                return self._reprompt(it, same_question=True)
+            self.reprompts[self.state] = n + 1
+            return [self._question()]
         if it.intent == "DATE":
             start = self._pick(it, "START") or self._pick(it, None)
             if start is None:

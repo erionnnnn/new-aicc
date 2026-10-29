@@ -9511,5 +9511,23 @@
     "style": "차분하고 친절함",
     "text": "네, 알겠습니다. 나중에 근무 가능해지시면 편하게 연락 주세요. 감사합니다, 선생님.",
     "filename": "1057_sc_faq_cannot_work_MALE.mp3"
+  },
+  {
+    "speaker": "남성 실장",
+    "gender": "남성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "간병 근무 말씀드린 거예요. 다음 간병 일을 언제부터 하실 수 있는지 여쭤보려고 연락드렸어요.",
+    "filename": "1058_sc_faq_which_work_MALE.mp3"
+  },
+  {
+    "speaker": "남성 실장",
+    "gender": "남성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "다음 간병 근무를 언제부터 하실 수 있는지 여쭤본 거예요. 예를 들어 다음 주 월요일부터, 이렇게 말씀해 주시면 돼요.",
+    "filename": "1059_sc_faq_clarify_when_MALE.mp3"
   }
 ]
