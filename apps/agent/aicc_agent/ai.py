@@ -192,16 +192,47 @@ class GeminiTTSAI(ExceptionAI):  # pragma: no cover - 외부 API
         if not self.api_key:
             raise RuntimeError("GEMINI_API_KEY 가 필요합니다")
 
+    def _engine(self, pack: str) -> str:
+        from aicc_api import tts
+        forced = os.environ.get("AICC_AI_TTS_ENGINE", "")
+        if forced:
+            return forced
+        eng = tts.pack_engine(pack)
+        if eng == "voicestudio" and not tts.vs_config(pack).get("model"):
+            return "gemini"
+        if eng == "melo" and pack != "female":
+            return "gemini"
+        return eng
+
     def respond(self, question: str, *, timeout_s: float = 10.0, context: str | None = None) -> AIReply:
+        """단계별 시간을 기록한다(2026-10-29 실통화: 원인 모를 TimeoutError 로 '잠시만요' 뒤 침묵).
+
+        - gemini-live 음원팩: Live 모델이 답 문장과 목소리를 한 번에 만든다(같은 Live 목소리, 왕복 1회)
+        - melo: 글 모델(최대 5초) + 이 PC MeloTTS
+        - gemini: 글 모델 + Gemini TTS. 통화 중에는 분당 한도에 걸려도 기다리지 않고 바로 실패 처리
+        """
         import concurrent.futures as cf
+        import logging
+        lg = logging.getLogger("aicc.agent")
+        pack = "male" if self.voice == "Charon" else "female"
+        engine = self._engine(pack)
+        t0 = time.monotonic()
+        if engine == "gemini-live":
+            if getattr(self, "_live", None) is None:
+                self._live = GeminiLiveAI(self.api_key)
+            self._live.voice = self.voice
+            r = self._live.respond(question, timeout_s=timeout_s, context=context)
+            lg.info("AI 단계: Live 한 번에(글+목소리) %dms %s", r.latency_ms, "성공" if r.ok else f"실패 {r.error}")
+            return r
+        stage = {"name": "글 생성", "t": t0}
 
         def work() -> tuple[str, bytes]:
             from google import genai
             from google.genai import types
-            client = genai.Client(api_key=self.api_key)
+            client = genai.Client(api_key=self.api_key, http_options=types.HttpOptions(timeout=5000))
             cfg = types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT, max_output_tokens=120, temperature=0.6)
             text, err = "", ""
-            for m in [x for x in (self._ok_model, os.environ.get("AICC_GEMINI_TEXT_MODEL"), *TEXT_MODELS) if x]:
+            for m in [x for x in dict.fromkeys((self._ok_model, os.environ.get("AICC_GEMINI_TEXT_MODEL"), *TEXT_MODELS)) if x]:
                 try:
                     r = client.models.generate_content(model=m, contents=context or question, config=cfg)
                     text = (r.text or "").strip()
@@ -211,30 +242,33 @@ class GeminiTTSAI(ExceptionAI):  # pragma: no cover - 외부 API
                 except Exception as e:  # noqa: BLE001
                     err = f"{m}: {type(e).__name__}: {str(e)[:120]}"
             if not text:
-                raise RuntimeError(err or "빈 답")
+                raise RuntimeError(f"글 생성 실패: {err or '빈 답'}")
             text = limit_sentences(text)
+            t_text = time.monotonic()
+            lg.info("AI 단계: 글 생성 %dms (%s)", int((t_text - t0) * 1000), self._ok_model)
+            stage.update(name=f"음성 생성({engine})", t=t_text)
             from aicc_api import tts
-            pack = "male" if self.voice == "Charon" else "female"
-            # 안내 음원을 VoiceStudio 로 만들었으면 AI 답도 VoiceStudio 같은 목소리로(설정에 모델이 있을 때)
-            if tts.vs_config(pack).get("model") and os.environ.get("AICC_AI_TTS_ENGINE", "") != "gemini" and \
-                    tts.pack_engine(pack) == "voicestudio":
+            if engine == "voicestudio":
                 wav = tts.synth_voicestudio(text, pack)
-            elif tts.pack_engine(pack) == "melo" and pack == "female":
-                wav = tts.synth_melo(text, pack)  # 안내 음원과 같은 MeloTTS 목소리(CPU 실시간)
-            elif tts.pack_engine(pack) == "gemini-live" and os.environ.get("AICC_AI_TTS_ENGINE", "") != "gemini":
-                wav = tts.synth_gemini_live(text, pack, self.api_key)  # 안내 음원과 같은 Live 목소리
+            elif engine == "melo":
+                wav = tts.synth_melo(text, pack, timeout=max(2.0, timeout_s - (t_text - t0)))
             else:
-                wav = tts.synth_gemini(text, pack, self.api_key)
+                wav = tts.synth_gemini(text, pack, self.api_key, wait_on_limit=False)
+            lg.info("AI 단계: 음성 생성(%s) %dms", engine, int((time.monotonic() - t_text) * 1000))
             import io
             import wave
             with wave.open(io.BytesIO(wav)) as w:
                 return text, w.readframes(w.getnframes())
 
-        t0 = time.monotonic()
         ex = cf.ThreadPoolExecutor(max_workers=1)
         try:
             text, pcm = ex.submit(work).result(timeout=timeout_s)
+        except cf.TimeoutError:
+            msg = f"{stage['name']} 단계에서 시간 초과({int((time.monotonic() - stage['t']) * 1000)}ms)"
+            lg.warning("AI 실패: %s", msg)
+            return AIReply(False, None, None, int((time.monotonic() - t0) * 1000), msg)
         except Exception as e:  # noqa: BLE001
+            lg.warning("AI 실패: %s: %s", type(e).__name__, str(e)[:300])
             return AIReply(False, None, None, int((time.monotonic() - t0) * 1000), f"{type(e).__name__}: {str(e)[:300]}")
         finally:
             ex.shutdown(wait=False)

@@ -288,7 +288,8 @@ def _pace() -> None:
     _calls.append(time.monotonic())
 
 
-def synth_gemini(text: str, pack_key: str, api_key: str | None, model: str | None = None) -> bytes:  # pragma: no cover
+def synth_gemini(text: str, pack_key: str, api_key: str | None, model: str | None = None,
+                 wait_on_limit: bool = True) -> bytes:  # pragma: no cover
     """Gemini 목소리(여성 Aoede / 남성 Charon)로 만든다. 모델이 고정된 뒤에는 다른 모델로 바꾸지 않는다."""
     if not api_key:
         raise TTSError("Gemini 키가 없습니다(설정 > 단말 > 이 PC 에이전트에서 입력)")
@@ -310,7 +311,8 @@ def synth_gemini(text: str, pack_key: str, api_key: str | None, model: str | Non
     for m in models:
         for attempt in range(6):
             try:
-                _pace()
+                if wait_on_limit:
+                    _pace()
                 resp = client.models.generate_content(model=m, contents=text, config=cfg)
                 part = resp.candidates[0].content.parts[0]
                 data = part.inline_data.data
@@ -334,6 +336,8 @@ def synth_gemini(text: str, pack_key: str, api_key: str | None, model: str | Non
                     # 하루 사용 한도(무료 등급) — 기다려도 안 풀리므로 바로 알린다. 만든 것까지는 저장돼 이어서 할 수 있다
                     raise TTSError("Gemini 하루 사용 한도를 넘었습니다. 한도가 초기화된 뒤(보통 오후 4~5시 무렵) 같은 버튼을 다시 "
                                    "누르면 이어서 만듭니다.") from None
+                if ("429" in msg or "RESOURCE_EXHAUSTED" in msg) and not wait_on_limit:
+                    raise TTSError("Gemini TTS 분당 한도 초과(통화 중이라 기다리지 않음)") from None
                 if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
                     time.sleep(62)  # 분당 요청 한도(TTS 10회/분) — 1분 창이 지나면 같은 모델로 재시도
                     continue
@@ -416,16 +420,16 @@ def melo_status() -> dict:
         return {"running": False, "ready": False, "url": c["url"], "error": type(e).__name__, "speed": c["speed"]}
 
 
-def synth_melo24(text: str, pack_key: str) -> bytes:
+def synth_melo24(text: str, pack_key: str, timeout: float = 120.0) -> bytes:
     """MeloTTS 원본(24kHz 모노 16bit WAV, 음량 맞춤)."""
     import httpx
     if pack_key != "female":
         raise TTSError("MeloTTS 한국어는 목소리가 1개(여성)뿐이라 여성 음원팩에만 씁니다. 남성 음원팩은 다른 엔진을 쓰세요.")
     c = melo_config()
     try:
-        r = httpx.post(f"{c['url']}/tts", json={"text": text, "speed": c["speed"]}, timeout=120)
+        r = httpx.post(f"{c['url']}/tts", json={"text": text, "speed": c["speed"]}, timeout=timeout)
     except httpx.TimeoutException:
-        raise TTSError("MeloTTS 응답 시간 초과(120초). PC 가 바쁘거나 모델을 처음 내려받는 중일 수 있습니다.") from None
+        raise TTSError(f"MeloTTS 응답 시간 초과({timeout:.0f}초). PC 가 바쁘거나 모델을 처음 내려받는 중일 수 있습니다.") from None
     except httpx.HTTPError:
         raise TTSError(f"MeloTTS 에 연결되지 않습니다({c['url']}). AICC 를 다시 켜거나 setup_melo 설치를 확인하세요.") from None
     if r.status_code != 200:
@@ -462,8 +466,8 @@ def to16k(wav: bytes) -> bytes:
         return _wav16k(resample_linear(pcm, rate, TARGET_RATE))
 
 
-def synth_melo(text: str, pack_key: str) -> bytes:
-    return normalize_wav(to16k(synth_melo24(text, pack_key)))
+def synth_melo(text: str, pack_key: str, timeout: float = 120.0) -> bytes:
+    return normalize_wav(to16k(synth_melo24(text, pack_key, timeout)))
 
 
 # ---------------- Gemini Live 로 고정 멘트 저장(기존 프로그램 v11.49 'ARS 음성 저장' 방식) ----------------

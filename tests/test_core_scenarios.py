@@ -203,3 +203,30 @@ def test_anytime_and_review_closings_when_recorded():
     assert d.say("11월 8일에 끝나요") == ["sc_work_end_date"]
     play = [a for a in d.actions if isinstance(a, Play)][-1]
     assert play.params["month"] == 11 and play.params["day"] == 8
+
+
+def test_hello_only_asks_if_heard_without_ai():
+    """2026-10-29 실통화: '여보세요.' 가 AI 로 넘어가 '잠시만요' 뒤 9초 침묵 → 녹음으로 바로 '들리세요?'."""
+    from aicc_core.flow import StartAI
+    from aicc_core.scenarios import BY_CODE
+    check = BY_CODE["SILENCE_CHECK"].key
+    f = CallFlow(REF, clips=ALL, ai_conversation=True)
+    f.answered()
+    for i in range(2):
+        acts = f.utterance("여보세요.", turn=f.turn, event_id=f"h{i}")
+        assert not any(isinstance(a, StartAI) for a in acts)
+        assert [a.key for a in acts if isinstance(a, Play)] == [check]
+    acts = f.utterance("네, 여보세요?", turn=f.turn, event_id="h3")  # 세 번째부터는 원래 처리
+    assert not f.finished
+    acts = f.utterance("지금 일 안 하고 있어요", turn=f.turn, event_id="h4")
+    assert [a.key for a in acts if isinstance(a, Play)] == ["ask_available_date"]
+
+
+def test_why_call_variants_play_recording_not_ai():
+    from aicc_core.flow import StartAI
+    for q in ("어떤 것 때문에 그러세요?", "왜요?", "무슨 일이세요?", "뭐 때문에 전화하셨어요"):
+        f = CallFlow(REF, clips=ALL, ai_conversation=True)
+        f.answered()
+        acts = f.utterance(q, turn=f.turn, event_id="w")
+        assert not any(isinstance(a, StartAI) for a in acts), q
+        assert [a.key for a in acts if isinstance(a, Play)] == ["sc_why_call"], q

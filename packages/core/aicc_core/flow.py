@@ -22,6 +22,9 @@ from .intents import Interpretation, interpret
 from .scenarios import BY_CODE, Scenario
 from .scenarios import match as match_scenario
 
+# '여보세요' 만 말함 = 안내를 못 들었거나 연결 확인 → AI 로 넘기지 않고 바로 "제 목소리 잘 들리세요?"(2026-10-29 실통화:
+# 여보세요가 AI 로 넘어가 '잠시만요' 뒤 9초 침묵)
+_GREETING_ONLY = re.compile(r"^(?:네|예)?[\s,.]*(?:여보세요|여보세여|여보|안녕하세요)(?:\s*(?:여보세요|네))*[\s.,?!~]*$")
 _QUESTION_END = re.compile(r"(?:\?|나요|까요|ㄴ가요|인가요|있어요\?|예요\?|에요\?)$")
 
 # WAIT_AVAILABILITY: 녹음 상황 응답(급여·병원 질문 등)을 들려준 뒤 일정 답을 기다리는 상태(질문을 다시 하지 않음)
@@ -208,6 +211,22 @@ class CallFlow:
             return []
         if self.state not in DIALOGUE_STATES:
             return []
+
+        if _GREETING_ONLY.match(text.strip()):
+            check = BY_CODE["SILENCE_CHECK"].key
+            n = self.reprompts.get(f"greet_{self.state}", 0)
+            if n < 2:
+                self.reprompts[f"greet_{self.state}"] = n + 1
+                if self._has(check) and self.state != "CONFIRM_DATE":
+                    return [self._play(check)]
+                return [self._question()]
+            # 계속 '여보세요'만 들리면 상대가 우리 소리를 못 듣는 것 → AI 대신 일반 재요청 규칙(횟수 넘으면 재연락)
+            m = self.reprompts.get(self.state, 0)
+            if m >= self.max_reprompt:
+                self.review_reasons.append(f"UNCLEAR_{self.state}")
+                return [self._play("callback"), HangUp("unclear"), *self._end("UNCONFIRMED")]
+            self.reprompts[self.state] = m + 1
+            return [self._question()]
 
         sc_actions = self._scenario(text, it, event_id)
         if sc_actions is not None:
