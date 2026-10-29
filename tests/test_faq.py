@@ -129,3 +129,51 @@ def test_clarifying_questions_answered_by_recording(prev):
             assert not any(isinstance(a, StartAI) for a in acts), p  # '지금 일 안 해요'도 AI 로 가지 않음
         acts = f.utterance(text, turn=f.turn, event_id="q")
         assert [a.key for a in acts if isinstance(a, Play)] == [key], (prev, text)
+
+
+# 2026-10-29: 질문 단계별로 나올 만한 되묻기·애매한 답 점검(AI 로 넘어가던 것 → 녹음 답)
+_SETUP = {"OPENING": [], "ASK_AVAILABLE_DATE": ["네"], "ASK_END_DATE": ["지금 근무 중이에요"],
+          "CONFIRM_DATE": ["다음 주 월요일부터요"]}
+_PROBE = [
+    ("OPENING", "누구라고요?", "sc_faq_who_again"), ("OPENING", "좋은간병이 뭐예요?", "sc_faq_company_again"),
+    ("OPENING", "무슨 확인이요?", "sc_faq_what_check"), ("OPENING", "전화 잘못하신 거 아니에요?", "sc_faq_wrong_number_q"),
+    ("OPENING", "실장님이세요?", "sc_faq_manager_q"), ("OPENING", "아 네네", "ask_available_date"),
+    ("OPENING", "간병사 맞는데요", "ask_available_date"),
+    ("ASK_AVAILABLE_DATE", "제가요?", "sc_faq_about_me"), ("ASK_AVAILABLE_DATE", "아 날짜요?", "sc_faq_ask_what_asked"),
+    ("ASK_AVAILABLE_DATE", "글쎄요", "sc_faq_not_sure"), ("ASK_AVAILABLE_DATE", "일 주실 거예요?", "sc_faq_want_work"),
+    ("ASK_AVAILABLE_DATE", "주말 지나서요", "sc_faq_conditional_time"), ("ASK_AVAILABLE_DATE", "다음 주는 돼요", "sc_faq_period_only"),
+    ("ASK_AVAILABLE_DATE", "지금 바로요?", "sc_faq_clarify_now"), ("ASK_AVAILABLE_DATE", "어디 병원인데요?", "sc_faq_hospital_where"),
+    ("ASK_END_DATE", "언제 끝나냐고요?", "sc_faq_clarify_end"), ("ASK_END_DATE", "얼마 안 남았어요", "sc_faq_end_vague"),
+    ("ASK_END_DATE", "환자분 퇴원할 때까지요", "sc_faq_end_depends_patient"),
+    ("ASK_END_DATE", "끝나면 연락드릴게요", "sc_faq_will_call_back"),
+    ("CONFIRM_DATE", "네? 다시요", "confirm_date"), ("CONFIRM_DATE", "그날 말고요", "sc_custom_reask_date"),
+    ("CONFIRM_DATE", "며칠이요?", "sc_faq_confirm_what"), ("CONFIRM_DATE", "확실해요", "closing"),
+]
+
+
+@pytest.mark.parametrize("state,text,key", _PROBE)
+def test_reactions_by_question_stage(state, text, key):
+    f = CallFlow(REF, clips=ALL, ai_conversation=True)
+    f.answered()
+    for i, p in enumerate(_SETUP[state]):
+        f.utterance(p, turn=f.turn, event_id=f"p{i}")
+    assert f.state == state
+    acts = f.utterance(text, turn=f.turn, event_id="x")
+    assert not any(isinstance(a, StartAI) for a in acts), text
+    assert key in [a.key for a in acts if isinstance(a, Play)], (text, acts)
+
+
+def test_repeat_request_never_confirms_date():
+    f = CallFlow(REF, clips=ALL, ai_conversation=True)
+    f.answered()
+    f.utterance("다음 주 월요일부터요", turn=f.turn, event_id="d")
+    f.utterance("네? 다시요", turn=f.turn, event_id="r")
+    assert f.state == "CONFIRM_DATE" and f.obs.confirmation_state != "CONFIRMED" and not f.finished
+
+
+def test_end_date_clarify_keeps_end_question():
+    f = CallFlow(REF, clips=ALL, ai_conversation=True)
+    f.answered()
+    f.utterance("지금 근무 중이에요", turn=f.turn, event_id="w")
+    f.utterance("언제 끝나냐고요?", turn=f.turn, event_id="q")
+    assert f.state == "ASK_END_DATE"  # 다음 답('다음 주 금요일요')을 종료일로 받는다

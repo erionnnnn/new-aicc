@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from .dates import DateMention
+from .faq import KEEP_STATE
 from .intents import Interpretation, interpret
 from .scenarios import BY_CODE, Scenario
 from .scenarios import match as match_scenario
@@ -239,6 +240,9 @@ class CallFlow:
                 self.reprompts[self.state] = n + 1
                 self.state = "WAIT_AVAILABILITY"
                 return [self._play(didnt)]
+            if self.state == "CONFIRM_DATE" and n < self.max_reprompt:
+                self.reprompts[self.state] = n + 1
+                return [self._question()]  # '네? 다시요' → 날짜 확인 질문을 다시(동의로 보지 않음, AI 로도 보내지 않음)
             return self._reprompt(it, same_question=True)
         if it.intent == "QUESTION":
             return self._exception(text)
@@ -411,6 +415,10 @@ class CallFlow:
                 self.obs.confirmation_state = "RANGE"
                 self.review_reasons.append("DATE_RANGE_ONLY")
                 return [self._play(self._review_close()), HangUp("range"), *self._end("UNCONFIRMED")]
+            period = BY_CODE.get("FAQ_PERIOD_ONLY")
+            if period and self._has(period.key):  # '다음 주는 돼요' → AI 대신 '며칠부터 가능하실까요?' 녹음
+                self.reprompts[self.state] = n + 1
+                return [self._play(period.key)]
             return self._reprompt(it, same_question=True)
         if it.intent == "UNKNOWN_DATE":
             if self.obs.work_status == "WORKING" and self.obs.end_date is None:
@@ -535,6 +543,8 @@ class CallFlow:
         play = self._play(s.key)
         if self.state == "CONFIRM_DATE":
             return [*extra, play, self._question()]  # 답한 뒤 날짜 재확인을 다시
+        if s.code in KEEP_STATE and self.state in ("ASK_END_DATE", "ASK_AVAILABLE_DATE", "WAIT_AVAILABILITY"):
+            return [*extra, play]  # 되묻기 답(끝에 같은 질문이 들어 있음) → 지금 질문 단계 그대로
         self.state = "WAIT_AVAILABILITY"
         return [*extra, play]
 
