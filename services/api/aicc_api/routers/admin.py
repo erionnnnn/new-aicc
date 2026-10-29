@@ -662,7 +662,14 @@ def set_proof(dev_id: str, body: ProofIn, p: Principal = Depends(current_user), 
     if d.kind != "a24":
         raise AppError(409, "NOT_REAL_DEVICE", "MOCK 단말에는 실통화 검증을 기록할 수 없습니다")
     if not d.probe_report and not services.call_evidence(db, d):
-        raise AppError(409, "PROBE_REQUIRED", "먼저 PC에서 aicc-probe 진단을 실행하거나, 실통화 시험을 1건 이상(상대가 받고 말한 통화) 해야 합니다")
+        ev = services.evidence_summary(db, d)
+        t = ev["this_device"]
+        others = ", ".join(f"{x['name']} {x['calls']}건" for x in ev["devices"] if x["calls"] and x["name"] != d.name)
+        raise AppError(409, "PROBE_REQUIRED",
+                       f"이 단말({d.name})의 실통화 기록: 전체 {t['calls']}건 · 실통화 {t['real']}건 · 받음 {t['answered']}건 · "
+                       f"받고 상대 말 인식 {t['answered_and_heard']}건"
+                       + (f" / 다른 단말 기록: {others}" if others else "")
+                       + ". 시험 모드로 본인 번호에 한 번 걸어 받고 말한 뒤 다시 기록하세요(또는 aicc-probe 진단).", ev)
     all_ok = body.rx_verified and body.tx_verified and body.pc_silent_verified and body.recording_verified
     if all_ok and body.test_calls < 10:
         raise AppError(422, "INSUFFICIENT_TESTS", "승인된 테스트 통화 10회 이상이 필요합니다(설계 08 H1)")

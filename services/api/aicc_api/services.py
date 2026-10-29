@@ -734,8 +734,14 @@ def call_evidence(db: Session, dev: Device) -> dict[str, bool]:
     사람이 듣고 확인하는 검증 기록(proof)은 따로 필요하다.
     """
     heard = (select(CallEvent.call_id).where(CallEvent.type == "utterance.final").distinct())
+    # 같은 휴대폰(일련번호)을 다른 이름으로 다시 등록한 경우(예: A24-1 → A24-2) 그 기록도 같은 단말 기록으로 본다
+    dev_ids = [dev.id]
+    if dev.serial_hash:
+        dev_ids += list(db.scalars(select(Device.id).where(Device.organization_id == dev.organization_id,
+                                                           Device.kind == "a24", Device.serial_hash == dev.serial_hash,
+                                                           Device.id != dev.id)))
     calls = db.scalars(select(CallSession).where(
-        CallSession.device_id == dev.id, CallSession.is_mock.is_(False), CallSession.answered_at.is_not(None),
+        CallSession.device_id.in_(dev_ids), CallSession.is_mock.is_(False), CallSession.answered_at.is_not(None),
         CallSession.ended_at.is_not(None), CallSession.id.in_(heard)).limit(200)).all()
     if not calls:
         return {}
@@ -747,6 +753,24 @@ def call_evidence(db: Session, dev: Device) -> dict[str, bool]:
     tx = bool(confirmed)
     return {"dial": True, "hangup": any(c.outcome != "DEVICE_ERROR" for c in calls), "answer_detection": True,
             "rx_audio": True, "tx_audio": tx, "recording": tx and bool(recorded)}
+
+
+def evidence_summary(db: Session, dev: Device) -> dict:
+    """실통화 기록 판정이 왜 비었는지 보여 주는 집계(이 단말 / 조직 전체)."""
+    def count(*conds) -> int:  # noqa: ANN002
+        return db.scalar(select(func.count()).select_from(CallSession).where(*conds)) or 0
+    heard = select(CallEvent.call_id).where(CallEvent.type == "utterance.final").distinct()
+    mine = CallSession.device_id == dev.id
+    org = CallSession.organization_id == dev.organization_id
+    real = CallSession.is_mock.is_(False)
+    devices = [{"name": d.name, "kind": d.kind, "same_phone": bool(dev.serial_hash and d.serial_hash == dev.serial_hash),
+                "calls": count(CallSession.device_id == d.id)}
+               for d in db.scalars(select(Device).where(Device.organization_id == dev.organization_id))]
+    return {"this_device": {"calls": count(mine), "real": count(mine, real),
+                            "answered": count(mine, real, CallSession.answered_at.is_not(None)),
+                            "answered_and_heard": count(mine, real, CallSession.answered_at.is_not(None),
+                                                        CallSession.id.in_(heard))},
+            "organization_real_calls": count(org, real), "devices": devices}
 
 
 def heartbeat(db: Session, p: Principal, payload: dict) -> dict:
