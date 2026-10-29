@@ -227,6 +227,34 @@ class A24Device(DeviceAdapter):
         except DeviceError:
             return None
 
+    def record_call_evidence(self, ev: dict) -> None:
+        """실통화 결과로 기능 확인 표시를 올린다(내리지는 않음). 근거 통화는 auto_evidence 에 남긴다."""
+        if not self.state_file:
+            return
+        st = self._probe_state()
+        if not (ev.get("answered") and ev.get("utterances", 0) > 0):
+            return  # 받지 않았거나 상대 말이 인식되지 않은 통화는 근거로 쓰지 않는다
+        st["dial_ok"] = True
+        st["answer_detection_ok"] = True
+        st["rx_audio_ok"] = True
+        if ev.get("phone_idle"):
+            st["hangup_ok"] = True
+        if ev.get("remote_answered_prompt") and ev.get("plays", 0) > 0:
+            st["tx_audio_ok"] = True
+        if ev.get("recording_both") and st.get("rx_audio_ok") and st.get("tx_audio_ok"):
+            st["recording_ok"] = True
+        auto = st.setdefault("auto_evidence", {"calls": 0, "recent": []})
+        auto["calls"] = int(auto.get("calls", 0)) + 1
+        auto["recent"] = ([{k: ev[k] for k in ("call_id", "outcome", "utterances", "plays", "recording_both")}]
+                          + list(auto.get("recent", [])))[:20]
+        st["auto_source"] = "실통화 결과 자동 기록(사람 청취 검증은 서버 '실통화 검증 결과 기록'에서 별도)"
+        self.state_file.parent.mkdir(parents=True, exist_ok=True)
+        self.state_file.write_text(json.dumps(st, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def evidence_report(self) -> dict | None:
+        st = self._probe_state()
+        return {"source": "auto_from_real_calls", "probe_state": st} if st.get("auto_evidence") else None
+
     def probe_capabilities(self) -> dict[str, str]:
         ps = self._probe_state()
         caps = {k: "unknown" for k in ("dial", "hangup", "answer_detection", "rx_audio", "tx_audio", "recording")}

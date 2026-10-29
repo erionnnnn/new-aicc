@@ -322,7 +322,7 @@ function Devices({ me }: { me: Me }) {
               <form className="proof" onSubmit={(e) => proof(e, d.id)}>
                 <p className="muted small">설계 11 실통화 시험 절차를 사람이 직접 수행한 결과만 체크하세요. 로그상 ‘전송됨’은 청취 증거가 아닙니다.</p>
                 <label className="inline"><input type="checkbox" name="rx" /> PC 마이크 없이 원격 발화가 RX로 들어왔다</label>
-                <label className="inline"><input type="checkbox" name="tx" /> 원격 청취자가 남녀 ARS 전체를 들었다</label>
+                <label className="inline"><input type="checkbox" name="tx" /> 원격 청취자가 실제로 쓸 안내 음성(ARS)을 들었다</label>
                 <label className="inline"><input type="checkbox" name="silent" /> 통화 중 PC 스피커·기본 출력에서 소리가 나지 않았다</label>
                 <label className="inline"><input type="checkbox" name="rec" /> 녹음에 양쪽 발화가 실제 시각대로 남았다</label>
                 <div className="grid3">

@@ -47,8 +47,14 @@ class Agent:
             caps = {k: "unsupported" for k in ("dial", "hangup", "answer_detection", "rx_audio", "tx_audio",
                                                "recording")}
             state, serial = "DISCONNECTED", None
+        report = self.probe_report
+        if report is None and hasattr(self.device, "evidence_report"):
+            try:
+                report = self.device.evidence_report()  # aicc-probe 대신 실통화 결과 근거
+            except Exception:  # noqa: BLE001
+                report = None
         hb = self.client.heartbeat(capabilities=caps, phone_state=state, serial=serial,
-                                   probe_report=self.probe_report, agent_version=VERSION)
+                                   probe_report=report, agent_version=VERSION)
         for cmd in hb.get("commands", []):
             if cmd["type"] == "STOP_NOW":
                 self.runner.stop_requested = True

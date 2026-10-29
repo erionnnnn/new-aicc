@@ -134,6 +134,9 @@ class CallRunner:
     def _emit(self, type_: str, turn: int, payload: dict | None = None, event_id: str | None = None) -> str:
         eid = event_id or new_event_id()
         self._remember(type_, payload or {})
+        counts = getattr(self, "_type_counts", None)
+        if counts is not None:
+            counts[type_] = counts.get(type_, 0) + 1
         if type_ in ("call.answered", "call.not_answered", "call.answer_unknown", "play", "utterance.final",
                      "ai.start", "ai.failed", "schedule.confirmed", "schedule.confirm_rejected", "silence.timeout",
                      "call.remote_hangup", "call.ended", "tx.barge_in", "call.greeting", "play.filler",
@@ -165,6 +168,8 @@ class CallRunner:
             self.device.allow_silent_tx = self.pilot
             self.device.silent_tx_used = False
         self._seq = 0
+        self._type_counts: dict[str, int] = {}
+        self._rec_ok = False
         self._log: list[tuple[str, str]] = []
         self._buf: list[dict] = []
         self.summary = CallSummary(self.call_id)
@@ -625,6 +630,7 @@ class CallRunner:
             try:
                 rec = self.recorder.finish()
                 self.client.upload_recording(self.call_id, rec.wav, rec.sha256, rec.duration_ms)
+                self._rec_ok = bool(self.recorder.rx) and bool(self.recorder.tx)
             except Exception as e:  # noqa: BLE001
                 self.summary.errors.append(f"recording: {type(e).__name__}")
                 try:
@@ -643,7 +649,25 @@ class CallRunner:
             self._safe_wait(300)
         self.client.finish(self.call_id, outcome=outcome, observation=self.flow.obs.as_dict(),
                            review_reasons=self.summary.review_reasons, phone_idle=idle)
+        self._record_evidence(outcome, idle)
         self._start_analysis()
+
+    def _record_evidence(self, outcome: str, idle: bool) -> None:
+        """실통화가 실제로 오간 증거를 단말 기능 기록(probe_state.json)에 남긴다(2026-10-29: 시험 통화를 수십 번 했는데
+        기능이 'unknown'으로 남아 실통화가 막힘). 사람이 듣고 확인하는 검증 기록(서버 proof)은 따로 필요하다."""
+        rec = getattr(self.device, "record_call_evidence", None)
+        if rec is None or self.is_mock:
+            return
+        c = self._type_counts
+        ev = {"call_id": self.call_id, "answered": c.get("call.answered", 0) > 0,
+              "utterances": c.get("utterance.final", 0), "plays": c.get("play", 0), "outcome": outcome,
+              "phone_idle": idle, "recording_both": self._rec_ok,
+              # 확인 질문(날짜 포함 안내)에 '네'로 답해 확정 → 상대가 우리 안내를 들었다는 통화 내 증거
+              "remote_answered_prompt": outcome in ("CONFIRMED", "ANYTIME") or c.get("schedule.confirmed", 0) > 0}
+        try:
+            rec(ev)
+        except Exception as e:  # noqa: BLE001
+            log.warning("단말 기능 기록 실패: %s", e)
 
     def _start_analysis(self) -> None:
         """통화 후 AI 분석(제안 전용). 간병사 말이 한 마디라도 있을 때만, 실패해도 통화 결과에는 영향 없음."""

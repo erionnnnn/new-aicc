@@ -342,3 +342,32 @@ def test_gcar_preload_skips_push_at_play_time(tmp_path):
     tx.play_async(pcm + b"\x00\x00", "opening")  # 내용이 다르면 새로 올림
     assert sum(1 for c in adb.calls if c[0] == "push") == pushes + 1
     tx.stop()
+
+
+def test_real_call_evidence_upgrades_capabilities(tmp_path):
+    """2026-10-29: 시험 통화를 여러 번 했는데 기능이 'unknown' → 실통화 결과로 기능 확인 표시를 올린다."""
+    from aicc_agent.a24 import A24Device
+
+    class FakeAdb:
+        def devices(self):
+            return [{"serial": "x", "state": "device"}]
+
+    st = tmp_path / "probe_state.json"
+    dev = A24Device(FakeAdb(), state_file=st, rx=object(), tx=object())
+    assert dev.probe_capabilities()["rx_audio"] == "unknown" and dev.evidence_report() is None
+    # 받지 않은 통화는 근거가 아님
+    dev.record_call_evidence({"call_id": "a", "answered": False, "utterances": 0, "plays": 1, "outcome": "NO_ANSWER",
+                              "phone_idle": True, "recording_both": False, "remote_answered_prompt": False})
+    assert dev.probe_capabilities()["rx_audio"] == "unknown"
+    # 받고 말했지만 확정 전 → RX·응답감지만
+    dev.record_call_evidence({"call_id": "b", "answered": True, "utterances": 2, "plays": 3, "outcome": "REMOTE_HANGUP",
+                              "phone_idle": True, "recording_both": True, "remote_answered_prompt": False})
+    caps = dev.probe_capabilities()
+    assert caps["answer_detection"] == caps["rx_audio"] == "supported" and caps["tx_audio"] == "unknown"
+    # 확인 질문에 '네' → 송출도 확인, 양쪽 녹음
+    dev.record_call_evidence({"call_id": "c", "answered": True, "utterances": 3, "plays": 4, "outcome": "CONFIRMED",
+                              "phone_idle": True, "recording_both": True, "remote_answered_prompt": True})
+    caps = dev.probe_capabilities()
+    assert all(caps[k] == "supported" for k in ("dial", "hangup", "answer_detection", "rx_audio", "tx_audio", "recording"))
+    rep = dev.evidence_report()
+    assert rep["source"] == "auto_from_real_calls" and rep["probe_state"]["auto_evidence"]["calls"] == 2
