@@ -24,7 +24,8 @@ from .scenarios import match as match_scenario
 
 # '여보세요' 만 말함 = 안내를 못 들었거나 연결 확인 → AI 로 넘기지 않고 바로 "제 목소리 잘 들리세요?"(2026-10-29 실통화:
 # 여보세요가 AI 로 넘어가 '잠시만요' 뒤 9초 침묵)
-_GREETING_ONLY = re.compile(r"^(?:네|예)?[\s,.]*(?:여보세요|여보세여|여보|안녕하세요)(?:\s*(?:여보세요|네))*[\s.,?!~]*$")
+_GREETING_ONLY = re.compile(r"^(?:(?:네|예)[\s,.]*)?(?:여보세요|여보세여|여보)(?:\s*(?:여보세요|네))*[\s.,?!~]*$"
+                            r"|^안녕하세요[\s.,?!~]*$")
 _QUESTION_END = re.compile(r"(?:\?|나요|까요|ㄴ가요|인가요|있어요\?|예요\?|에요\?)$")
 
 # WAIT_AVAILABILITY: 녹음 상황 응답(급여·병원 질문 등)을 들려준 뒤 일정 답을 기다리는 상태(질문을 다시 하지 않음)
@@ -127,7 +128,7 @@ class Observation:
 
 class CallFlow:
     def __init__(self, reference: date, *, max_reprompt: int = 2, max_ai: int = 2, max_corrections: int = 3,
-                 clips: set[str] | frozenset[str] | None = None, max_scenarios: int = 4,
+                 clips: set[str] | frozenset[str] | None = None, max_scenarios: int = 8,
                  ai_conversation: bool = False, max_ai_conversation: int = 6):
         self.reference = reference
         self.state = "QUEUED"
@@ -185,7 +186,7 @@ class CallFlow:
 
         # 1) 전역 최우선
         dele = BY_CODE["CUSTOM_DELETE_REVIEW"]
-        if self._has(dele.key) and match_scenario(text, ("DELETE",)) is dele:
+        if self._has(dele.key) and match_scenario(text, ("DELETE", "REVIEW")) is dele:  # 녹음 삭제 요청(REVIEW)은 연락거부가 아님
             # 연락처 삭제 요청 = 연락거부(즉시 차단) + 삭제는 담당자 확인
             self.obs.history.append({"event": "REFUSAL", "event_id": event_id, "delete_request": True})
             self.review_reasons.append(dele.review)

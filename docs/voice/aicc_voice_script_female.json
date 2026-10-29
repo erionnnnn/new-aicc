@@ -7693,5 +7693,1805 @@
     "style": "차분하고 친절함",
     "text": "12월 31일까지 근무하시는군요. 그다음에는 언제부터 근무 가능하실까요?",
     "filename": "855_endack_12_31.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "저는 좋은간병의 자동 안내예요. 말씀해 주신 내용은 담당 실장님도 그대로 확인하세요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "856_sc_faq_real_person.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 정확한 확인을 위해 통화 내용이 기록되고 있어요. 일정 확인 용도로만 쓰입니다. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "857_sc_faq_recorded.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "좋은간병이에요. 간병사 선생님과 간병이 필요한 환자분을 연결해 드리는 곳이에요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "858_sc_faq_which_company.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "걱정되실 수 있죠. 좋은간병에서 등록하신 선생님께 일정만 확인드리는 전화고, 돈이나 개인정보는 여쭤보지 않아요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "859_sc_faq_scam_worry.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "선생님 연락처가 좋은간병 간병사 명단에 있어서 연락드렸어요. 혹시 잘못 등록된 거라면 말씀해 주시면 연락하지 않도록 남겨 두겠습니다.",
+    "filename": "860_sc_faq_who_registered.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "금방 끝나요, 일 분이면 충분합니다. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "861_sc_faq_call_length.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "좋은간병에 등록된 선생님들께 순서대로 일정을 여쭤보고 있어요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "862_sc_faq_why_me.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "번거롭게 해 드려 죄송해요. 최신 일정으로 다시 한번만 확인드리려고요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "863_sc_faq_called_before.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "담당 실장님 성함은 일감 안내드릴 때 함께 알려 드릴게요. 지금은 근무 일정만 확인드리고 있어요.",
+    "filename": "864_sc_faq_who_manager.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "궁금하신 점은 이 번호로 다시 전화 주셔도 되고, 담당 실장님이 연락드릴 때 편하게 말씀해 주셔도 돼요.",
+    "filename": "865_sc_faq_callback_number.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "사무실 위치는 담당 실장님이 연락드릴 때 안내드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "866_sc_faq_office_location.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "언제부터 근무하실 수 있는지만 말씀해 주시면 돼요. 예를 들어 다음 주 월요일부터 가능하다, 이렇게요.",
+    "filename": "867_sc_faq_what_to_answer.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "설문은 아니고요, 근무 가능 일정만 간단히 확인드리는 전화예요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "868_sc_faq_survey.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "광고 전화는 아니에요. 등록하신 선생님께 근무 일정만 확인드리고 있어요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "869_sc_faq_ad_call.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "좋은간병에 등록된 정보로 연락드렸어요. 어떻게 등록됐는지는 담당 실장님이 확인해서 따로 연락드리도록 남겨 두겠습니다.",
+    "filename": "870_sc_faq_how_know_name.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "말씀해 주신 일정은 일감 안내에만 쓰여요. 원하지 않으시면 연락하지 않도록 바로 남겨 드릴 수 있어요.",
+    "filename": "871_sc_faq_personal_info_use.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "지금은 특정 환자분 건으로 연락드린 건 아니에요. 환자분 나이나 상태는 실제 일감 소개드릴 때 정확하게 안내드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "872_sc_faq_patient_age.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "환자분 성별도 실제 일감 안내 때 같이 알려 드려요. 선호하시는 쪽이 있으면 말씀해 주셔도 참고할게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "873_sc_faq_patient_gender.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "환자분 질환이나 수술 여부는 실제 일감 소개드릴 때 정확하게 안내드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "874_sc_faq_patient_disease.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "치매 여부도 일감 안내 때 미리 말씀드려요. 치매 환자분이 어려우시면 말씀해 주세요, 참고해 둘게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "875_sc_faq_dementia.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "거동 상태도 실제 일감 소개 때 정확하게 알려 드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "876_sc_faq_bedridden.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "석션 같은 처치가 필요한지는 일감마다 달라서 소개드릴 때 꼭 함께 안내드려요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "877_sc_faq_suction.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "콧줄 식사 같은 부분도 일감 안내 때 미리 말씀드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "878_sc_faq_tube_feeding.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "대소변 도움이 필요한지도 실제 일감 소개 때 정확히 안내드려요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "879_sc_faq_diaper.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "환자분 체격도 일감 안내 때 같이 알려 드릴게요. 무거운 환자분이 어려우시면 말씀해 주세요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "880_sc_faq_patient_weight.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "감염 관련 내용은 일감 안내 때 반드시 먼저 말씀드려요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "881_sc_faq_infection.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "환자분 성향도 미리 확인해서 일감 안내 때 알려 드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "882_sc_faq_violent_patient.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "한 분을 보시는지 공동 간병인지는 일감마다 달라서 실제 일감 소개드릴 때 정확하게 안내드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "883_sc_faq_patient_count.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "재활 보조가 필요한지는 실제 일감 안내 때 알려 드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "884_sc_faq_rehab.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "암 환자분이나 호스피스 일감도 안내드릴 때 미리 말씀드려요. 어려우시면 말씀해 주세요, 참고할게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "885_sc_faq_cancer.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "뇌졸중 같은 질환 여부도 일감 소개 때 함께 안내드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "886_sc_faq_stroke.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "의사소통이 되시는지도 실제 일감 안내 때 알려 드려요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "887_sc_faq_patient_conscious.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "보호자분 상황도 일감 안내 때 같이 말씀드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "888_sc_faq_patient_family.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "병원인지 가정인지는 일감마다 달라요. 실제 일감 소개드릴 때 정확하게 안내드릴게요. 선호하시는 곳이 있으면 말씀해 주셔도 돼요.",
+    "filename": "889_sc_faq_home_or_hospital.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "중환자 일감은 안내드릴 때 미리 분명하게 말씀드려요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "890_sc_faq_icu.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "수술 후 간병인지도 일감 소개 때 정확히 알려 드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "891_sc_faq_post_surgery.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "지금은 특정 환자분 건이 아니라 일정 확인 전화라서요. 환자분 정보는 실제 일감 소개드릴 때 정확하게 안내드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "892_sc_faq_patient_detail_general.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "간병사 성별 조건도 일감마다 달라서 소개드릴 때 같이 안내드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "893_sc_faq_male_caregiver_need.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "상주 근무인지는 일감마다 달라서 실제 일감 소개드릴 때 정확하게 안내드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "894_sc_faq_live_in.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "식사 관련 조건도 실제 일감 안내 때 정확하게 말씀드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "895_sc_faq_meals.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "쉬실 자리나 잠자리 환경도 일감 소개 때 함께 알려 드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "896_sc_faq_sleep_place.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "휴무는 일감마다 달라서 실제 일감 소개드릴 때 정확하게 안내드릴게요. 원하시는 휴무가 있으면 말씀해 주셔도 돼요.",
+    "filename": "897_sc_faq_days_off.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "출근 시간은 실제 일감이 정해지면 정확히 안내드려요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "898_sc_faq_start_time.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "근무 기간도 일감마다 달라서 실제 일감 소개드릴 때 정확하게 안내드릴게요. 원하시는 기간이 있으면 말씀해 주세요.",
+    "filename": "899_sc_faq_job_length.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "복장이나 준비물은 일감이 정해지면 담당 실장님이 안내드릴 거예요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "900_sc_faq_uniform.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "준비물은 일감이 정해지면 미리 알려 드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "901_sc_faq_bring_items.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "병원마다 필요한 검사가 달라서 일감 안내 때 함께 알려 드려요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "902_sc_faq_test_covid.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "주차는 병원마다 달라서 일감 소개 때 확인해 드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "903_sc_faq_parking.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "일감 위치는 소개드릴 때 정확히 알려 드릴게요. 원하시는 지역을 말씀해 주시면 참고할게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "904_sc_faq_hospital_distance.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "인수인계나 교대 방식도 일감이 정해지면 안내드려요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "905_sc_faq_shift_handover.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "쉬는 시간이나 외출 가능 여부는 일감마다 달라서 실제 일감 소개드릴 때 정확하게 안내드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "906_sc_faq_break_time.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "명절 근무 조건은 일감 안내 때 따로 말씀드려요. 명절에 쉬셔야 하면 말씀해 주세요, 참고할게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "907_sc_faq_holiday_work.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 일정이 바뀌시면 이 번호로 편하게 연락 주세요. 그때 다시 반영해 드릴게요.",
+    "filename": "908_sc_faq_change_schedule_later.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "시간제 일감도 있으면 안내드릴 수 있어요. 원하시는 시간대를 말씀해 주시면 참고할게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "909_sc_faq_part_time.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "하루 일감도 들어오면 안내드릴 수 있어요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "910_sc_faq_daily_job.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "맞는 일감이 들어오면 바로 연락드릴게요. 그래서 가능하신 날짜를 미리 알아 두려고요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "911_sc_faq_when_job_comes.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "일감을 약속드리는 전화는 아니고요, 일정을 알아 두면 맞는 일감을 더 빨리 안내드릴 수 있어요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "912_sc_faq_job_guarantee.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "일감이 들어오면 조건을 먼저 말씀드리고, 선생님이 하실지 정하시면 돼요. 억지로 배정하지 않아요.",
+    "filename": "913_sc_faq_multiple_offers.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 조건이 안 맞으면 언제든 거절하셔도 괜찮아요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "914_sc_faq_refuse_job_ok.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "교통 관련 조건은 일감마다 달라서 실제 일감 소개드릴 때 정확하게 안내드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "915_sc_faq_transport_help.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "추가 근무 조건은 일감이 정해지면 정확하게 안내드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "916_sc_faq_overtime.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "일정이 겹치지 않도록 가능하신 날짜 기준으로 안내드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "917_sc_faq_two_jobs.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "수수료 같은 비용은 담당 실장님이 정확하게 안내드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "918_sc_faq_fee.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "세금 관련 내용은 담당 실장님이 정확하게 안내드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "919_sc_faq_tax.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "지급 일정은 담당 실장님이 확인해서 따로 연락드리도록 남겨 두겠습니다.",
+    "filename": "920_sc_faq_pay_day.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "지급 방법은 담당 실장님이 정확하게 안내드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "921_sc_faq_pay_method.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "금액 조정은 실제 일감 소개 때 담당 실장님과 말씀 나누시면 돼요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "922_sc_faq_pay_raise.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "조건은 일감마다 달라서 소개드릴 때 정확하게 비교해 보실 수 있게 안내드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "923_sc_faq_pay_compare.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "보험 관련 내용은 담당 실장님이 정확하게 안내드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "924_sc_faq_insurance.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "그 부분은 담당 실장님이 확인해서 따로 연락드리도록 남겨 두겠습니다.",
+    "filename": "925_sc_faq_severance.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "선생님께 먼저 돈을 받는 일은 없어요. 궁금하신 비용은 담당 실장님이 안내드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "926_sc_faq_deposit.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "그 요청은 담당 실장님이 확인해서 따로 연락드리도록 남겨 두겠습니다.",
+    "filename": "927_sc_faq_advance_pay.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "지급 기준은 일감마다 달라서 실제 일감 소개드릴 때 정확하게 안내드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "928_sc_faq_pay_daily_or_monthly.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "수당 조건은 실제 일감 안내 때 정확하게 말씀드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "929_sc_faq_night_pay.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "불편 드려 죄송합니다. 그 내용은 담당 실장님이 확인해서 따로 연락드리도록 남겨 두겠습니다.",
+    "filename": "930_sc_faq_unpaid.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "서류 요청은 담당 실장님이 확인해서 따로 연락드리도록 남겨 두겠습니다.",
+    "filename": "931_sc_faq_receipt.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "지급 주체는 일감마다 달라서 담당 실장님이 정확히 안내드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "932_sc_faq_pay_family.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "그런 경우의 정산은 담당 실장님이 확인해서 따로 연락드리도록 남겨 두겠습니다.",
+    "filename": "933_sc_faq_cancel_pay.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "그런 비용 문제는 일감 안내 때 담당 실장님이 정확하게 말씀드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "934_sc_faq_expenses.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 희망하시는 금액 기준으로 참고해 둘게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "935_sc_faq_min_pay.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 금액은 실제 일감 소개 때 먼저 말씀드리고 정하시면 돼요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "936_sc_faq_pay_before_decide.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "경력에 따른 조건도 일감 안내 때 담당 실장님이 같이 말씀드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "937_sc_faq_pay_experience.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "필요한 자격은 일감마다 달라서 소개드릴 때 같이 확인해 드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "938_sc_faq_certificate.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "병원마다 필요한 서류가 달라서 일감 안내 때 알려 드려요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "939_sc_faq_health_cert.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "교육이 필요한 일감이면 미리 안내드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "940_sc_faq_education.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "앱 관련 사용법은 담당 실장님이 따로 안내드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "941_sc_faq_app_use.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 알겠습니다. 요청 내용을 담당 실장님이 확인하도록 남겨 두겠습니다. 그동안 고생 많으셨어요, 선생님.",
+    "filename": "942_sc_faq_withdraw.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "번호 변경 요청은 담당 실장님이 확인해서 따로 연락드리도록 남겨 두겠습니다.",
+    "filename": "943_sc_faq_change_phone.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 사시는 곳이 바뀌셨군요. 주소 변경은 담당 실장님이 확인해서 따로 연락드리도록 남겨 두겠습니다. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "944_sc_faq_change_address.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "등록 방법은 담당 실장님이 따로 안내드릴게요. 우선 가능하신 일정을 말씀해 주시면 같이 남겨 둘게요.",
+    "filename": "945_sc_faq_register_how.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "소개해 주시면 감사하죠. 소개하실 분은 담당 실장님께 연락하시도록 남겨 둘게요.",
+    "filename": "946_sc_faq_friend_refer.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "계약서 관련 요청은 담당 실장님이 확인해서 따로 연락드리도록 남겨 두겠습니다.",
+    "filename": "947_sc_faq_contract_doc.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "가능한 일감 조건은 담당 실장님이 정확하게 확인해 드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "948_sc_faq_foreigner.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "나이 때문에 안내를 안 드리는 건 아니에요. 맞는 일감 기준으로 안내드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "949_sc_faq_age_limit.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "처음이셔도 괜찮아요. 경력에 맞는 일감 위주로 안내드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "950_sc_faq_no_experience.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "근무 후기 관련 내용은 담당 실장님이 따로 안내드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "951_sc_faq_review_rating.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "다른 곳에 등록하셔도 괜찮아요. 저희도 맞는 일감 있으면 안내드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "952_sc_faq_other_agency.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "궁금하신 점은 담당 실장님이 자세히 안내드릴게요. 저는 일정만 확인드리고 있어요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "953_sc_faq_company_trust.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "홈페이지나 자세한 안내는 담당 실장님이 연락드릴 때 알려 드릴게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "954_sc_faq_homepage.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "정보 수정 요청은 담당 실장님이 확인해서 따로 연락드리도록 남겨 두겠습니다.",
+    "filename": "955_sc_faq_profile_update.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "필요한 서류가 있으면 담당 실장님이 따로 안내드릴게요. 이 전화로는 어떤 서류도 요청하지 않아요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "956_sc_faq_photo_id.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "이 전화에서는 계좌나 금융 정보를 여쭤보지 않아요. 필요하면 담당 실장님이 정식으로 안내드릴게요.",
+    "filename": "957_sc_faq_bank_info.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "근무 이력 확인은 담당 실장님이 확인해서 따로 연락드리도록 남겨 두겠습니다.",
+    "filename": "958_sc_faq_work_history.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "불편을 드려 죄송합니다. 말씀하신 내용은 담당 실장님이 확인해서 따로 연락드리도록 남겨 두겠습니다.",
+    "filename": "959_sc_faq_complaint_company.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "그렇게 말씀해 주셔서 감사합니다, 선생님. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "960_sc_faq_thanks_company.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "처음 연락받으셔서 낯서실 수 있어요. 좋은간병에서 등록된 선생님께 일정만 확인드리고 있어요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "961_sc_faq_new_registration.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "많이 힘드셨겠어요. 그 내용은 담당 실장님이 확인해서 따로 연락드리도록 남겨 두겠습니다.",
+    "filename": "962_sc_faq_guardian_conflict.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "많이 놀라셨겠어요. 그 일은 담당 실장님이 확인해서 따로 연락드리도록 남겨 두겠습니다.",
+    "filename": "963_sc_faq_patient_abuse.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "정말 힘드셨겠어요. 그 내용은 담당 실장님이 바로 확인하도록 꼭 남겨 두겠습니다.",
+    "filename": "964_sc_faq_sexual_harass.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "많이 아프시겠어요. 몸 먼저 챙기세요. 다치신 내용은 담당 실장님이 확인하도록 바로 남겨 두겠습니다.",
+    "filename": "965_sc_faq_injured.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "그 일은 담당 실장님이 바로 확인해야 하는 내용이라, 확인 요청으로 꼭 남겨 두겠습니다.",
+    "filename": "966_sc_faq_patient_accident.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "그러셨군요. 마음이 많이 힘드셨겠어요. 그 내용은 담당 실장님이 확인하도록 남겨 두겠습니다.",
+    "filename": "967_sc_faq_patient_died.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "퇴원 소식은 담당 실장님이 확인하도록 남겨 두겠습니다. 다음 근무는 언제부터 가능하세요?",
+    "filename": "968_sc_faq_patient_discharge.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "많이 힘드셨나 봐요. 그 마음은 담당 실장님이 확인해서 따로 연락드리도록 남겨 두겠습니다.",
+    "filename": "969_sc_faq_want_quit_now.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "고생이 많으세요. 말씀하신 어려움은 담당 실장님이 확인해서 따로 연락드리도록 남겨 두겠습니다.",
+    "filename": "970_sc_faq_too_hard_patient.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "그런 일이 있으셨군요. 그 내용은 담당 실장님이 확인해서 따로 연락드리도록 남겨 두겠습니다.",
+    "filename": "971_sc_faq_nurse_conflict.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "불편하셨겠어요. 그 내용은 담당 실장님이 확인해서 따로 연락드리도록 남겨 두겠습니다.",
+    "filename": "972_sc_faq_coworker_conflict.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "그 내용은 담당 실장님이 확인해서 따로 연락드리도록 남겨 두겠습니다.",
+    "filename": "973_sc_faq_lost_item.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "많이 속상하셨겠어요. 그 일은 담당 실장님이 꼭 확인하도록 남겨 두겠습니다.",
+    "filename": "974_sc_faq_accused.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "간병 외 일을 요구받으셨군요. 그 내용은 담당 실장님이 확인해서 따로 연락드리도록 남겨 두겠습니다.",
+    "filename": "975_sc_faq_extra_work_asked.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "많이 지치셨겠어요. 그 상황은 담당 실장님이 확인해서 따로 연락드리도록 남겨 두겠습니다.",
+    "filename": "976_sc_faq_no_rest_onsite.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "몸 먼저 잘 챙기세요, 선생님. 근무 일정은 담당 실장님이 확인하도록 남겨 두겠습니다.",
+    "filename": "977_sc_faq_sick_now.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "많이 경황없으시겠어요. 일정은 담당 실장님이 확인하도록 남겨 두겠습니다. 편하실 때 연락 주세요.",
+    "filename": "978_sc_faq_family_emergency.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "일정 조정 요청은 담당 실장님이 확인해서 따로 연락드리도록 남겨 두겠습니다.",
+    "filename": "979_sc_faq_early_leave.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "병원 출입 관련 문의는 담당 실장님이 확인해서 따로 연락드리도록 남겨 두겠습니다.",
+    "filename": "980_sc_faq_hospital_rules.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "의료 행위 관련 요청은 담당 실장님이 꼭 확인해야 해서 담당 실장님이 확인해서 따로 연락드리도록 남겨 두겠습니다.",
+    "filename": "981_sc_faq_medicine_task.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 그 희망은 참고해 둘게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "982_sc_faq_want_same_patient.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "말씀하신 내용은 담당 실장님이 확인해서 따로 연락드리도록 남겨 두겠습니다.",
+    "filename": "983_sc_faq_onsite_general.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 알겠습니다. 편하실 때 연락 주시면 일정 반영해 드릴게요. 감사합니다, 선생님.",
+    "filename": "984_sc_faq_will_call_back.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 천천히 생각해 보시고 편하실 때 알려 주세요. 감사합니다, 선생님.",
+    "filename": "985_sc_faq_think_about.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 가족분들과 상의해 보시고 편하실 때 알려 주세요. 감사합니다.",
+    "filename": "986_sc_faq_ask_family.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 그때 다시 연락드릴게요. 감사합니다, 선생님.",
+    "filename": "987_sc_faq_call_later_time.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 바쁘신데 죄송해요. 다음에 다시 연락드릴게요.",
+    "filename": "988_sc_faq_in_meeting.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 진료 잘 받으세요. 다음에 다시 연락드릴게요.",
+    "filename": "989_sc_faq_at_hospital_now.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 일하시는 중이시군요. 바쁘실 텐데 다음에 다시 연락드릴게요.",
+    "filename": "990_sc_faq_with_patient_now.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "아이고, 쉬시는데 죄송해요. 다음에 다시 연락드릴게요.",
+    "filename": "991_sc_faq_sleeping.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 잘 다녀오세요. 돌아오셔서 근무 가능해지시면 연락 주세요. 감사합니다.",
+    "filename": "992_sc_faq_abroad.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 그동안 고생 많으셨어요, 선생님. 앞으로 연락드리지 않도록 남겨 두겠습니다.",
+    "filename": "993_sc_faq_retired.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 다른 일을 하고 계시군요. 나중에 간병 일정 생기시면 편하게 연락 주세요. 감사합니다.",
+    "filename": "994_sc_faq_other_job.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 이미 다음 일이 정해지셨군요. 그 일은 언제 끝나세요? 끝나는 날을 알려 주시면 그 뒤로 참고할게요.",
+    "filename": "995_sc_faq_already_booked.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 그럼 그때 다시 여쭤볼게요. 감사합니다, 선생님.",
+    "filename": "996_sc_faq_ask_week_later.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 조건을 보고 정하셔도 괜찮아요. 그래도 대략 언제부터 가능하신지 알려 주시면 맞는 일감 먼저 안내드릴게요.",
+    "filename": "997_sc_faq_depends_job.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 정확하지 않아도 괜찮아요. 대략 언제쯤부터 가능하실 것 같으세요?",
+    "filename": "998_sc_faq_maybe_date.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 날짜로 말씀해 주시면 더 정확하게 반영할 수 있어요. 며칠부터 가능하실까요?",
+    "filename": "999_sc_faq_period_only.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 지금 일이 끝나는 날짜를 아시면 먼저 알려 주시겠어요? 그 뒤로 참고해 둘게요.",
+    "filename": "1000_sc_faq_wait_contract_end.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 확인해 보시고 편하실 때 알려 주세요. 감사합니다, 선생님.",
+    "filename": "1001_sc_faq_need_check_cal.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 짧은 기간 가능하신 걸로 참고할게요. 언제부터 가능하세요?",
+    "filename": "1002_sc_faq_only_short_now.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 편하게 말씀해 주셔서 감사해요. 그럼 오늘부터 바로 가능하신 걸로 봐도 될까요?",
+    "filename": "1003_sc_faq_any_day_ok.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 집안일로 바쁘시군요. 근무 가능해지시면 편하게 연락 주세요. 감사합니다.",
+    "filename": "1004_sc_faq_not_decided_family.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 몸 먼저 잘 챙기세요. 회복하시고 근무 가능해지시면 연락 주세요.",
+    "filename": "1005_sc_faq_hospital_schedule_self.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 시험 준비 잘하세요. 근무 가능해지시면 편하게 연락 주세요. 감사합니다.",
+    "filename": "1006_sc_faq_study_exam.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 조건 맞는 일감 위주로 안내드릴게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "1007_sc_faq_only_specific_job.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 아직 끝나는 날을 모르시는군요. 대략 언제쯤 끝날 것 같으세요?",
+    "filename": "1008_sc_faq_work_until_unknown.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 내일 편하실 때 알려 주세요. 감사합니다, 선생님.",
+    "filename": "1009_sc_faq_tomorrow_answer.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 가능하시군요. 그럼 언제부터 근무 가능하신지 날짜로 말씀해 주시겠어요?",
+    "filename": "1010_sc_faq_half_yes.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "자주 연락드려 죄송해요. 연락 횟수를 줄이도록 남겨 두겠습니다. 오늘은 근무 가능 날짜만 여쭤봐도 될까요?",
+    "filename": "1011_sc_faq_no_more_calls_soft.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 천천히 말씀드릴게요. 선생님, 언제부터 근무 가능하신지 알려 주시겠어요?",
+    "filename": "1012_sc_faq_speak_slowly.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 자동 안내라 조금 어색하게 들리실 수 있어요. 근무 가능하신 날짜만 알려 주시겠어요?",
+    "filename": "1013_sc_faq_voice_weird.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "아니요, 받으시는 쪽은 통화 요금이 들지 않아요. 근무 가능하신 날짜만 알려 주시겠어요?",
+    "filename": "1014_sc_faq_call_cost.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "녹음 삭제 요청은 담당 실장님이 확인해서 따로 연락드리도록 남겨 두겠습니다.",
+    "filename": "1015_sc_faq_recording_delete.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 담당 실장님과 통화를 원하신다고 남겨 두겠습니다. 실장님이 따로 연락드릴 거예요.",
+    "filename": "1016_sc_faq_human_please.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "불편하게 해 드려 죄송해요. 짧게 하나만 여쭤볼게요. 언제부터 근무 가능하세요?",
+    "filename": "1017_sc_faq_angry.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "저도 감사합니다, 선생님. 근무 가능하신 날짜만 알려 주시면 바로 마칠게요.",
+    "filename": "1018_sc_faq_thank_you.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 덕분에요. 선생님도 잘 지내셨죠? 근무 가능하신 날짜 여쭤보려고 연락드렸어요.",
+    "filename": "1019_sc_faq_how_are_you.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 천천히 하세요. 기다릴게요.",
+    "filename": "1020_sc_faq_hold_on.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 시간 내 주셔서 감사합니다. 근무 가능해지시면 편하게 연락 주세요.",
+    "filename": "1021_sc_faq_can_i_hang_up.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 근무 가능하신 날짜만 알려 주시면 끝이에요.",
+    "filename": "1022_sc_faq_are_you_done.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "하하, 감사해요. 근무 가능하신 날짜만 알려 주시면 바로 마칠게요.",
+    "filename": "1023_sc_faq_joke_talk.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "좋게 말씀해 주셔서 감사합니다. 근무 가능하신 날짜 알려 주시겠어요?",
+    "filename": "1024_sc_faq_compliment_voice.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "그러셨군요, 선생님. 이야기 들어 드리고 싶은데 저는 일정만 확인드리는 안내라서요. 담당 실장님께도 안부 전해 둘게요. 근무 가능하신 날짜 알려 주시겠어요?",
+    "filename": "1025_sc_faq_lonely_talk.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "많이 걱정되시겠어요. 일감이 빨리 연결되도록 가능하신 날짜부터 남겨 둘게요. 근무 가능하신 날짜만 먼저 알려주시겠어요?",
+    "filename": "1026_sc_faq_worry_money.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 급하게 일 구하시는 걸로 남겨 둘게요. 오늘부터 바로 가능하신가요?",
+    "filename": "1027_sc_faq_urgent_job.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "이른 시간에 연락드려 죄송해요. 짧게 하나만 여쭤볼게요. 언제부터 근무 가능하세요?",
+    "filename": "1028_sc_faq_wrong_time_call.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 맞아요. 근무를 시작하실 수 있는 날짜만 말씀해 주시면 돼요.",
+    "filename": "1029_sc_faq_repeat_date_question.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "제가 어렵게 말씀드렸네요. 다음 간병 일을 언제부터 하실 수 있는지 여쭤보는 거예요.",
+    "filename": "1030_sc_faq_confused.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "그런 건 제가 답을 드리기 어려워요. 근무 가능하신 날짜만 알려 주시겠어요?",
+    "filename": "1031_sc_faq_test_bot.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "선생님도 좋은 하루 보내세요. 근무 가능하신 날짜만 알려 주시면 마칠게요.",
+    "filename": "1032_sc_faq_bless.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "아니에요, 괜찮습니다. 근무 가능하신 날짜만 편하게 말씀해 주세요.",
+    "filename": "1033_sc_faq_sorry.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 집에서 가까운 곳으로 참고해 둘게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "1034_sc_faq_near_home.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 서울 지역으로 참고해 둘게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "1035_sc_faq_seoul_only.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 말씀하신 지역으로 참고해 둘게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "1036_sc_faq_gyeonggi_only.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 여자 환자분 위주로 참고해 둘게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "1037_sc_faq_female_patient_only.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 남자 환자분 위주로 참고해 둘게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "1038_sc_faq_male_patient_only.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 치매 환자분은 제외하는 걸로 참고해 둘게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "1039_sc_faq_no_dementia.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 석션 없는 일감으로 참고해 둘게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "1040_sc_faq_no_suction.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 체격이 큰 환자분은 피하는 걸로 참고해 둘게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "1041_sc_faq_no_heavy.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 가정 간병 위주로 참고해 둘게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "1042_sc_faq_home_care_only.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 요양 시설 쪽으로 참고해 둘게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "1043_sc_faq_nursing_home_ok.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 큰 병원 쪽으로 참고해 둘게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "1044_sc_faq_big_hospital.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 장기 근무 희망으로 참고해 둘게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "1045_sc_faq_long_term.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 단기 근무로 참고해 둘게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "1046_sc_faq_short_term.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 출퇴근하는 낮 근무로 참고해 둘게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "1047_sc_faq_daytime_only.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 쉬셔야 하는 요일을 참고해 둘게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "1048_sc_faq_weeks_off.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 감염 위험 있는 일감은 제외하는 걸로 참고해 둘게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "1049_sc_faq_no_infection.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 같이 근무하시는 희망으로 참고해 둘게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "1050_sc_faq_couple_work.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 말씀하신 지역으로 참고해 둘게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "1051_sc_faq_specific_area.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 너무 먼 곳은 제외하는 걸로 참고해 둘게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "1052_sc_faq_no_far.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 일대일 간병으로 참고해 둘게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "1053_sc_faq_one_patient.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 공동 간병도 가능하신 걸로 참고해 둘게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "1054_sc_faq_shared_ok.mp3"
+  },
+  {
+    "speaker": "김태희 실장",
+    "gender": "여성",
+    "age": "젊은 성인",
+    "pitch": "적당한 음조",
+    "style": "차분하고 친절함",
+    "text": "네, 종교 활동 시간은 참고해 둘게요. 우선 언제부터 근무 가능하신지 말씀해 주시겠어요?",
+    "filename": "1055_sc_faq_religion_time.mp3"
   }
 ]

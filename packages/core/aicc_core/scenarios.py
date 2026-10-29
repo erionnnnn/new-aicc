@@ -16,34 +16,8 @@ kind
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
 
-
-# 실제 상담원은 간병사를 '선생님'으로 부른다(회사 통화녹음 분석, 2026-10-27, 사용자 승인).
-# 기존 녹음은 '간병사님'이라, 문구가 바뀐 칸은 녹음을 쓰지 않고 같은 Gemini 목소리로 다시 만든다.
-def honorific(text: str) -> str:
-    return text.replace("간병사님", "선생님")
-
-
-@dataclass(frozen=True)
-class Scenario:
-    code: str
-    kind: str
-    keywords: tuple[str, ...]
-    text: str
-    note: str = ""            # 관찰 기록에 남길 메모(선호 조건 등)
-    outcome: str | None = None  # END 일 때 통화 결과
-    review: str | None = None   # END 일 때 검수 사유
-
-    @property
-    def key(self) -> str:
-        return "sc_" + self.code.lower()
-
-    @property
-    def say(self) -> str:
-        """지금 쓰는 문구(호칭 '선생님'). text 는 기존 녹음에 실제로 들어 있는 말."""
-        return honorific(self.text)
-
+from .scenario_types import Scenario, honorific  # noqa: F401 - 다른 모듈이 여기서 가져다 씀
 
 SCENARIOS: tuple[Scenario, ...] = (
     # 순서가 곧 우선순위다(위에서부터 먼저 맞는 것). 2026-10-27 사용자 제공 시나리오 2145건으로 순서·키워드 조정.
@@ -200,6 +174,13 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario("AVAILABLE_NOW", "UNUSED", (),
              "네, 현재 바로 근무 가능하신 걸로 확인해둘게요. 조건 맞는 일감이 있으면 안내드리겠습니다. 감사합니다."),
 )
+BASE_SCENARIO_KEYS = tuple(s.key for s in SCENARIOS)  # 기존 녹음 시나리오(통화 시작 때 미리 올려 둘 것)
+
+# 예상 질문 200개(faq.py) — 기존 시나리오 뒤에 붙인다(겹치면 기존이 우선)
+from .faq import FAQ_FIRST_SCENARIOS, FAQ_SCENARIOS  # noqa: E402
+
+# 먼저 볼 예상 질문(녹음 삭제 요청이 '연락처 삭제=연락거부'로 처리되지 않게 맨 앞) → 기존 시나리오 → 나머지 예상 질문
+SCENARIOS = FAQ_FIRST_SCENARIOS + SCENARIOS + FAQ_SCENARIOS
 BY_CODE = {s.code: s for s in SCENARIOS}
 SCENARIO_KEYS = tuple(s.key for s in SCENARIOS)
 _NORM = re.compile(r"[\s.,!?~…·'\"-]+")

@@ -27,7 +27,7 @@ from aicc_core.flow import (
     StartAI,
     StopTx,
 )
-from aicc_core.scenarios import SCENARIO_KEYS
+from aicc_core.scenarios import BASE_SCENARIO_KEYS
 from aicc_core.voicepack import confirm_date_sequence, variants_of
 
 from .ai import ExceptionAI, build_prompt
@@ -39,7 +39,7 @@ from .stt import STTAdapter
 
 log = logging.getLogger("aicc.agent")
 PRELOAD_KEYS = ("opening", "ack", "ask_working", "ask_end_date", "ask_available_date", "closing", "ask_repeat",
-                "callback", "refusal_ack", "ai_wait", "wrong_person", "explain_role", *SCENARIO_KEYS)
+                "callback", "refusal_ack", "ai_wait", "wrong_person", "explain_role", *BASE_SCENARIO_KEYS)
 NO_BARGE_IN = {"refusal_ack", "closing", "wrong_person", "callback", "ai_failed"}
 
 

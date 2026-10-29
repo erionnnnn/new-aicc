@@ -11,7 +11,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from aicc_core.scenarios import CURRENT_TEXTS, SCENARIOS
+from aicc_core.faq import FAQS
+from aicc_core.scenarios import BASE_SCENARIO_KEYS, CURRENT_TEXTS, SCENARIOS
 from aicc_core.voicepack import (
     DATE_PIECE_KEYS,
     DEFAULT_SCRIPTS,
@@ -37,11 +38,13 @@ def text(key: str) -> str:
 
 def keys() -> list[tuple[str, str]]:
     unused = {s.key for s in SCENARIOS if s.kind == "UNUSED"}
-    base = [k for k in (*REQUIRED_KEYS, "ack", *(s.key for s in SCENARIOS), *EXTRA_TEXTS) if k not in unused]
+    base = [k for k in (*REQUIRED_KEYS, "ack", *BASE_SCENARIO_KEYS, *EXTRA_TEXTS) if k not in unused]
     out = [(k, "차분하고 친절함") for k in base]
     out += [(k, "차분하고 친절함") for k in VARIANT_TEXTS]
     out += [(k, "차분함") for k in DATE_PIECE_KEYS]
     out += [(k, "차분하고 친절함") for k in (*FULL_CONFIRM_KEYS, *END_ACK_KEYS)]
+    # 예상 질문 200개(2026-10-29 추가) — 기존 번호가 바뀌지 않도록 맨 뒤에 붙인다(표에 적은 분야 순서)
+    out += [("sc_faq_" + f.code.lower(), "차분하고 친절함") for f in FAQS]
     return out
 
 

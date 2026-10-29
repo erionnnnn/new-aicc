@@ -113,9 +113,10 @@ def test_refusal_still_wins_and_scenario_limit():
     d = D()
     assert d.say("급여 얼마예요 연락하지 마세요") == ["refusal_ack"]
     d = D()
-    for q in ("급여 얼마예요", "어느 병원이에요", "몇 시간 근무예요", "어떤 환자예요"):
+    for q in ("급여 얼마예요", "어느 병원이에요", "몇 시간 근무예요", "어떤 환자예요", "치매 있으세요?",
+              "석션 해야 돼요?", "주차 돼요?", "유니폼 있어요?"):
         d.say(q)
-    assert d.f.scenario_count == 4
+    assert d.f.scenario_count == 8  # 2026-10-29: 예상 질문 200개 추가로 한도 4 → 8
     acts = d.f.utterance("누구세요", turn=d.f.turn, event_id="z")
     assert type(acts[0]).__name__ == "StartAI"  # 한도 초과 후에는 AI 로
 
