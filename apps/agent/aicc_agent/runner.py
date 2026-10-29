@@ -49,6 +49,7 @@ class RunnerConfig:
     ring_timeout_ms: int = 40000
     poll_ms: int = 200
     listen_ms: int = 40           # 재생 중 상대 음성 확인 간격
+    hangup_tail_ms: int = 1200     # 마지막 안내가 끝난 뒤 끊기 전 여유(휴대폰 송출 지연만큼)
     analysis_async: bool = True   # 통화 후 AI 분석을 백그라운드로(다음 통화를 늦추지 않음)
     greeting_wait_ms: int = 1500  # 받자마자 '여보세요' 하는 동안 기다림
     barge_threshold: float = 600.0  # 안내 재생 중에는 평소(300)보다 큰 소리만 상대 말로 본다(메아리·잡음 오인 방지)
@@ -405,9 +406,18 @@ class CallRunner:
 
     # ---------------- 액션 실행 ----------------
     def _apply(self, actions: list) -> None:  # noqa: C901
-        for a in actions:
+        for i, a in enumerate(actions):
             if isinstance(a, Play):
-                self._play(a)
+                # 끊기 직전 마지막 안내(마무리 인사)는 상대가 '네, 감사합니다' 해도 끊지 않고 끝까지 재생
+                # (2026-10-29 실전: 마무리 녹음 도중 상대 맞장구로 송출이 멈추고 바로 끊김)
+                self._final_play = any(isinstance(x, HangUp) for x in actions[i + 1:])
+                try:
+                    self._play(a)
+                finally:
+                    self._final_play = False
+                if any(isinstance(x, HangUp) for x in actions[i + 1:]) and not self.is_mock:
+                    # 송출 모듈은 소리를 휴대폰에 넘긴 뒤 끝나지만 상대에게는 조금 늦게 들린다 → 끝부분이 잘리지 않게 잠시 기다림
+                    self._safe_wait(self.cfg.hangup_tail_ms)
             elif isinstance(a, StopTx):
                 self.device.stop_tx()
                 self._emit("tx.stop", self.flow.turn, {"reason": a.reason})
@@ -492,7 +502,7 @@ class CallRunner:
         self._wait_tx_idle()
         keys = self.voice.render(a)
         self.device.tx_play_async(pcm, keys[0] if len(keys) == 1 else None)
-        barge_ok = self.cfg.barge_in and a.key not in NO_BARGE_IN
+        barge_ok = self.cfg.barge_in and a.key not in NO_BARGE_IN and not getattr(self, "_final_play", False)
         need = max(1, self.cfg.barge_min_ms // FRAME_MS)
         loud_run = 0
         stopped_at: int | None = None

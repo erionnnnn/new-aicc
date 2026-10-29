@@ -225,6 +225,24 @@ def test_no_barge_in_for_closing_plays_to_end():
     assert dev.stopped_at is None and dev.t >= 2000
 
 
+def test_final_message_before_hangup_is_not_cut_by_backchannel():
+    """2026-10-29 실전: 예상 질문 마무리 녹음 도중 상대가 '네' 하자 송출이 멈추고 바로 끊김 → 끝까지 재생 + 끊기 전 여유."""
+    from aicc_core.flow import HangUp, Play
+    dev = AsyncTxDevice(play_ms=2000)
+    dev.hung = None
+    dev.hangup = lambda: setattr(dev, "hung", dev.t)
+    r = _runner(dev)
+    r.flow = _Flow()
+    r.flow.turn = 1
+    r.flow.review_reasons = []
+    r._emit = lambda *a, **k: "e"
+    r.device.write_tx_frames = lambda f: 0
+    r._play = lambda a: r._play_async(a, b"\x00" * 64000, [], dev.t)
+    r._apply([Play("sc_faq_not_decided_family", 1), HangUp("x")])
+    assert dev.stopped_at is None  # 상대 맞장구(0.5~1.1초)로 멈추지 않음
+    assert dev.hung is not None and dev.hung >= 2000 + r.cfg.hangup_tail_ms - 40  # 재생 끝 + 여유 뒤에 끊음
+
+
 def test_google_stt_falls_back_to_pc_on_failure():
     from aicc_agent.device import Frame
     from aicc_agent.stt import GeminiLiveSTT, MockSTT
