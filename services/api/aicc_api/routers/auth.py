@@ -35,7 +35,10 @@ def _user_out(u: User, org: Organization) -> dict:
     return {"id": u.id, "username": u.username, "role": u.role, "perms": u.perms or {},
             "can": {k: p.can(k) for k in PERMISSIONS},
             "organization": {"id": org.id, "name": org.name, "environment": org.environment,
-                             "company_name": org.company_name}}
+                             "company_name": org.company_name,
+                             # 실통화 시험 모드: 켜져 있으면 시험 번호에만 발신(대상 선택 화면 안내용)
+                             "pilot_enabled": org.environment == "production" and bool((org.policies or {}).get("pilot_enabled")),
+                             "test_number_count": len((org.policies or {}).get("test_numbers") or [])}}
 
 
 @router.get("/auth/status")

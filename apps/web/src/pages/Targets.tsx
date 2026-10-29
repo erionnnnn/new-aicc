@@ -19,6 +19,7 @@ export default function TargetsPage({ me, batchId }: { me: Me; batchId: string |
   const [name, setName] = useState("");
   const [err, setErr] = useState<ApiError | null>(null);
   const [busy, setBusy] = useState(false);
+  const [made, setMade] = useState<any>(null);
   const items: any[] = list.data?.items ?? [];
   const dialable = useMemo(() => items.filter((i) => i.dialable), [items]);
   const meta = committed.find((b) => b.id === batch);
@@ -33,7 +34,9 @@ export default function TargetsPage({ me, batchId }: { me: Me; batchId: string |
     setErr(null); setBusy(true);
     try {
       const r = await api.post("/api/v1/campaigns", { batch_id: batch, target_ids: [...sel], voice_pack_id: pack, name: name || undefined }, true);
-      go("/prepare", { campaign: r.campaign_id });
+      // 일부가 빠졌으면 바로 넘어가지 않고 몇 명이 왜 빠졌는지 먼저 보여 준다(2026-10-29: 전체 선택했는데 1명만 발신)
+      if ((r.excluded_targets ?? []).length > 0) setMade(r);
+      else go("/prepare", { campaign: r.campaign_id });
     } catch (e) { setErr(e as ApiError); } finally { setBusy(false); }
   }
 
@@ -45,6 +48,10 @@ export default function TargetsPage({ me, batchId }: { me: Me; batchId: string |
         {committed.map((b) => <option key={b.id} value={b.id}>{b.file_name} ({b.created_at})</option>)}
       </select>
     }>
+      {me.organization.pilot_enabled && (
+        <Notice kind="warn">실통화 시험 모드가 켜져 있습니다. 설정에 등록한 시험 번호({me.organization.test_number_count ?? 0}개)에만 전화가 걸리고, 나머지 대상은 캠페인을 만들 때 빠집니다.
+          명단 전체에 걸려면 <a href="#/settings?tab=devices">설정</a>에서 시험 모드를 끄세요(실통화 검증 결과 기록·운영 정책 완료 필요).</Notice>
+      )}
       {meta && <p className="muted">근무확정일 열 의미: {meta.date_semantics === "NEXT_AVAILABLE" ? "다음 근무 가능일(통화 확인 시 갱신)" : "실제 배정 확정일(갱신 안 함)"}</p>}
       <div className="toolbar">
         <input type="search" placeholder="이름·간병인 번호·연락처 끝 4자리" value={q} onChange={(e) => setQ(e.target.value)} aria-label="검색" />
@@ -101,6 +108,18 @@ export default function TargetsPage({ me, batchId }: { me: Me; batchId: string |
           </div>
           {(packs.data ?? []).length === 0 && <Notice kind="warn">음원팩이 없습니다. 관리자가 <a href="#/settings?tab=voice">설정 &gt; 안내 음성</a>에서 만들어야 합니다.</Notice>}
           <ErrorBox error={err} />
+          {made && (() => {
+            const by: Record<string, number> = {};
+            for (const e of made.excluded_targets) by[e.reason] = (by[e.reason] ?? 0) + 1;
+            return (
+              <Notice kind="warn">
+                <strong>선택 {made.accepted_count + made.excluded_targets.length}명 중 {made.accepted_count}명만 발신 대상입니다.</strong>{" "}
+                제외: {Object.entries(by).map(([k, n]) => `${ERROR_TEXT[k] ?? k} ${n}명`).join(", ")}.
+                {by.NOT_TEST_NUMBER ? <> 실통화 시험 모드라 시험 번호에만 겁니다. 명단 전체에 걸려면 <a href="#/settings?tab=devices">설정</a>에서 시험 모드를 끄고, 실통화 검증 결과·운영 정책을 완료한 뒤 캠페인을 다시 만드세요.</> : null}
+                <div className="actions"><button className="btn" onClick={() => go("/prepare", { campaign: made.campaign_id })}>이대로 {made.accepted_count}명 통화 준비</button></div>
+              </Notice>
+            );
+          })()}
           <div className="actions">
             <button className="btn primary" disabled={busy || sel.size === 0 || !pack} onClick={create}>
               {sel.size}명으로 통화 준비

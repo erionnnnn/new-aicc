@@ -308,6 +308,8 @@ def test_pilot_mode_calls_only_registered_test_numbers(admin):
                                                  "target_ids": ids}, idem=True).json()
     assert camp["pilot"] is True and camp["accepted_count"] == 1
     assert camp["excluded_targets"][0]["reason"] == "NOT_TEST_NUMBER"
+    org = admin.get("/api/v1/auth/me").json()["organization"]  # 대상 선택 화면이 '시험 모드라 시험 번호만' 안내
+    assert org["pilot_enabled"] is True and org["test_number_count"] == 1
     dev = admin.post("/api/v1/devices", json={"name": "A24", "kind": "a24"}).json()
     device = MockDevice()
     agent = make_agent(admin, dev, device=device)

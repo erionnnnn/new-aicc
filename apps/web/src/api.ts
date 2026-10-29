@@ -58,12 +58,13 @@ export const ERROR_TEXT: Record<string, string> = {
   DUP_EXTERNAL_NO_CONFLICT: "같은 번호·다른 연락처", DUP_ROW: "중복 행", SHARED_PHONE: "연락처 공유",
   BLOCKED: "연락거부", DB_DATE_DIFFERS: "통화 확인값 유지",
   NOT_TEST_NUMBER: "시험 번호 아님", ROW_ERROR: "행 오류", DUPLICATE: "중복", SHARED_PHONE_REVIEW: "연락처 공유 검수",
+  DUPLICATE_PHONE: "같은 연락처 중복(한 번만 발신)", NOT_IN_BATCH: "명부에 없음", PHONE_MISSING: "연락처 없음",
 };
 
 export type Me = {
   id: string; username: string; role: string; perms: Record<string, boolean>;
   can: Record<string, boolean>;
-  organization: { id: string; name: string; environment: string; company_name: string };
+  organization: { id: string; name: string; environment: string; company_name: string; pilot_enabled?: boolean; test_number_count?: number };
 };
 
 export const CLIP_LABEL: Record<string, string> = {
