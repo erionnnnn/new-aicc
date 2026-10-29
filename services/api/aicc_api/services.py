@@ -723,11 +723,42 @@ def _maybe_complete(db: Session, campaign_id: str) -> None:
         camp.ended_at = utcnow()
 
 
+def call_evidence(db: Session, dev: Device) -> dict[str, bool]:
+    """이 단말로 실제로 오간 통화 기록(서버 DB)에서 확인되는 기능.
+
+    2026-10-29: 실통화 시험을 수십 번 했는데 단말 기능이 aicc-probe 진단으로만 올라가게 돼 있어 'unknown' → 실통화 막힘.
+    - 받았고(answered_at) 상대 말이 인식된(utterance.final) 통화 → 발신·응답감지·RX
+    - 그 통화가 정상 종료 → 종료
+    - 날짜 확인 질문에 '네'로 확정(schedule.confirmed) → 상대가 안내를 들음 = TX
+    - 그 통화 녹음이 저장됨(READY, 2채널) → 녹음
+    사람이 듣고 확인하는 검증 기록(proof)은 따로 필요하다.
+    """
+    heard = (select(CallEvent.call_id).where(CallEvent.type == "utterance.final").distinct())
+    calls = db.scalars(select(CallSession).where(
+        CallSession.device_id == dev.id, CallSession.is_mock.is_(False), CallSession.answered_at.is_not(None),
+        CallSession.ended_at.is_not(None), CallSession.id.in_(heard)).limit(200)).all()
+    if not calls:
+        return {}
+    ids = [c.id for c in calls]
+    confirmed = set(db.scalars(select(CallEvent.call_id).where(CallEvent.call_id.in_(ids),
+                                                               CallEvent.type == "schedule.confirmed")).all())
+    recorded = set(db.scalars(select(Recording.call_id).where(Recording.call_id.in_(ids), Recording.state == "READY",
+                                                              Recording.channels >= 2)).all())
+    tx = bool(confirmed)
+    return {"dial": True, "hangup": any(c.outcome != "DEVICE_ERROR" for c in calls), "answer_detection": True,
+            "rx_audio": True, "tx_audio": tx, "recording": tx and bool(recorded)}
+
+
 def heartbeat(db: Session, p: Principal, payload: dict) -> dict:
     dev = p.device
     assert dev is not None
     dev.heartbeat_at = utcnow()
-    caps = payload.get("capabilities") or {}
+    caps = dict(payload.get("capabilities") or {})
+    if dev.kind == "a24" and any(caps.get(k) == "unknown" for k in caps):
+        # 단말이 '미확인'으로 보고해도 이 단말의 실제 통화 기록으로 확인된 기능은 '보고됨'으로(내리지는 않음)
+        for k, ok in call_evidence(db, dev).items():
+            if ok and caps.get(k) == "unknown":
+                caps[k] = "supported"
     if dev.kind == "mock":
         caps = {k: "mock" for k in ("dial", "hangup", "answer_detection", "rx_audio", "tx_audio", "recording")}
     new_caps = {k: v for k, v in caps.items() if v in ("supported", "unsupported", "unknown", "mock")}

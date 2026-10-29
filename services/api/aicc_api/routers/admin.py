@@ -661,7 +661,7 @@ def set_proof(dev_id: str, body: ProofIn, p: Principal = Depends(current_user), 
         raise AppError(404, "NOT_FOUND", "단말이 없습니다")
     if d.kind != "a24":
         raise AppError(409, "NOT_REAL_DEVICE", "MOCK 단말에는 실통화 검증을 기록할 수 없습니다")
-    if not d.probe_report:
+    if not d.probe_report and not services.call_evidence(db, d):
         raise AppError(409, "PROBE_REQUIRED", "먼저 PC에서 aicc-probe 진단을 실행하거나, 실통화 시험을 1건 이상(상대가 받고 말한 통화) 해야 합니다")
     all_ok = body.rx_verified and body.tx_verified and body.pc_silent_verified and body.recording_verified
     if all_ok and body.test_calls < 10:

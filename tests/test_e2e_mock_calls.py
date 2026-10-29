@@ -320,6 +320,16 @@ def test_pilot_mode_calls_only_registered_test_numbers(admin):
     s = run_all(agent)
     assert len(s) == 1 and device.dialed == ["01080000001"]
     assert "01080000002" not in device.dialed
+    # 2026-10-29: 단말이 기능을 '미확인'으로 보고해도 이 단말의 실제 통화 기록(받음·상대 말·확정·녹음)으로 '보고됨'
+    unknown = {k: "unknown" for k in ("dial", "hangup", "answer_detection", "rx_audio", "tx_audio", "recording")}
+    agent.client.heartbeat(capabilities=unknown, phone_state="IDLE")
+    d = next(x for x in admin.get("/api/v1/devices").json() if x["id"] == dev["id"])
+    assert all(d["capabilities"][k] == "supported" for k in unknown), d["capabilities"]
+    # aicc-probe 없이도 실통화 기록이 있으면 사람 검증 결과를 기록할 수 있다
+    r = admin.post(f"/api/v1/devices/{dev['id']}/proof", json={"rx_verified": True, "tx_verified": True,
+                   "pc_silent_verified": True, "recording_verified": True, "test_calls": 12, "remote_listener": "담당"})
+    assert r.status_code == 200, r.text
+    assert next(x for x in admin.get("/api/v1/devices").json() if x["id"] == dev["id"])["real_call_ready"] is True
     # 시험 모드를 끄면 남은 시험 캠페인도 발신 거부
     admin.put("/api/v1/settings", json={"policies": {"pilot_enabled": False}})
     assert agent.step().status != "CALLED"
