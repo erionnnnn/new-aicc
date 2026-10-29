@@ -94,3 +94,13 @@ def test_cannot_work_ends_call():
     f2.answered()
     acts = f2.utterance("지금은 일 못 해요, 다음 주 월요일부터 돼요", turn=f2.turn, event_id="d")
     assert "confirm_date" in [a.key for a in acts if isinstance(a, Play)]  # 날짜가 있으면 날짜 우선
+
+
+@pytest.mark.parametrize("text", ["나중에 전화주세요", "나중에 다시 전화 주세요", "다음에 해요", "나중에요",
+                                  "좀 이따가 다시 걸어주세요", "조금 뒤에 다시 연락 주세요"])
+def test_call_me_later_ends_politely(text):
+    """2026-10-29 사용자 예시: '나중에 전화주세요' 계열 → '다음에 다시 연락드릴게요' 후 종료(재연락)."""
+    f = CallFlow(REF, clips=ALL, ai_conversation=True)
+    f.answered()
+    acts = f.utterance(text, turn=f.turn, event_id="l")
+    assert [a.key for a in acts if isinstance(a, Play)] == ["callback"] and f.outcome == "CALLBACK_REQUESTED"
