@@ -334,6 +334,13 @@ function Devices({ me }: { me: Me }) {
                 <div className="actions"><button className="btn primary">검증 결과 기록</button><button type="button" className="btn ghost" onClick={() => setProofFor(null)}>취소</button></div>
               </form>
             ) : <button className="btn ghost small" onClick={() => setProofFor(d.id)}>실통화 검증 결과 기록</button>)}
+            {admin && (
+              <button className="btn ghost small danger-text" onClick={async () => {
+                if (!window.confirm(`'${d.name}' 단말을 목록에서 삭제할까요?\n통화 기록은 남고, 이 단말 토큰으로는 더 이상 연결되지 않습니다.\n지금 이 PC 에이전트가 쓰는 단말이면 새 단말로 다시 연결해야 합니다.`)) return;
+                setErr(null);
+                try { await api.del(`/api/v1/devices/${d.id}`); list.reload(); } catch (e2) { setErr(e2 as ApiError); }
+              }}>단말 삭제</button>
+            )}
           </div>
         ))}
         <ErrorBox error={err} />

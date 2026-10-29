@@ -37,6 +37,7 @@ export const api = {
   post: <T = any>(u: string, b?: any, idem = false) => req<T>("POST", u, b ?? {}, { idem }),
   put: <T = any>(u: string, b?: any) => req<T>("PUT", u, b ?? {}),
   patch: <T = any>(u: string, b?: any) => req<T>("PATCH", u, b ?? {}),
+  del: <T = any>(u: string) => req<T>("DELETE", u),
   upload: <T = any>(u: string, file: File) => {
     const f = new FormData();
     f.append("file", file);

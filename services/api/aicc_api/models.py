@@ -162,6 +162,8 @@ class Device(Base):
     active_call_id: Mapped[str | None] = mapped_column(String(36), unique=True, nullable=True)
     lease_expires_at: Mapped[datetime | None] = mapped_column(TZDateTime(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=now)
+    # 목록에서 삭제됨(통화 기록이 있어 행은 남김, 토큰 폐기). 같은 휴대폰 기록은 실통화 근거로 계속 쓴다
+    retired_at: Mapped[datetime | None] = mapped_column(TZDateTime(), nullable=True)
 
 
 class Campaign(Base):

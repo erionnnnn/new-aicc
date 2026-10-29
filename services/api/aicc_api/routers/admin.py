@@ -583,7 +583,35 @@ def _dev_out(d: Device) -> dict:
 @router.get("/devices")
 def list_devices(p: Principal = Depends(current_user), db: Session = Depends(get_db)) -> list[dict]:
     require(p, "view_results")
-    return [_dev_out(d) for d in db.scalars(select(Device).where(Device.organization_id == p.org.id))]
+    return [_dev_out(d) for d in db.scalars(select(Device).where(Device.organization_id == p.org.id,
+                                                                 Device.retired_at.is_(None)))]
+
+
+@router.delete("/devices/{dev_id}")
+def delete_device(dev_id: str, p: Principal = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    """단말 목록에서 삭제. 통화·캠페인 기록이 없으면 완전히 지우고, 있으면 기록은 남긴 채 숨기고 토큰을 폐기한다."""
+    from ..models import CallSession, Campaign
+    require(p, "settings")
+    d = db.get(Device, dev_id)
+    if d is None or d.organization_id != p.org.id or d.retired_at is not None:
+        raise AppError(404, "NOT_FOUND", "단말이 없습니다")
+    if d.active_call_id:
+        raise AppError(409, "DEVICE_BUSY", "통화 중인 단말은 삭제할 수 없습니다")
+    running = db.scalar(select(Campaign).where(Campaign.device_id == d.id, Campaign.state.in_(("RUNNING", "STOPPING"))))
+    if running:
+        raise AppError(409, "DEVICE_IN_USE", f"진행 중인 캠페인({running.name})을 먼저 멈추세요")
+    has_calls = db.scalar(select(CallSession.id).where(CallSession.device_id == d.id).limit(1))
+    has_camps = db.scalar(select(Campaign.id).where(Campaign.device_id == d.id).limit(1))
+    if has_calls or has_camps:
+        d.retired_at = services.utcnow()
+        d.token_hash = token_hash(new_token())  # 이 단말 토큰으로는 더 이상 접속 불가
+        mode = "hidden"
+    else:
+        db.delete(d)
+        mode = "deleted"
+    audit(db, p, "device.delete", "device", dev_id, {"mode": mode})
+    db.commit()
+    return {"ok": True, "mode": mode}
 
 
 @router.post("/devices", status_code=201)

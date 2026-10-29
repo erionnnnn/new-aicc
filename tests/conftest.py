@@ -54,6 +54,9 @@ class Api:
     def get(self, url, **kw):
         return self.c.get(url, headers=self._h(), **kw)
 
+    def delete(self, url, **kw):
+        return self.c.delete(url, headers=self._h(), **kw)
+
     def post(self, url, json=None, idem=False, **kw):
         return self.c.post(url, json=json, headers=self._h(idem=idem), **kw)
 

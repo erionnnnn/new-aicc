@@ -333,6 +333,15 @@ def test_pilot_mode_calls_only_registered_test_numbers(admin):
     # 시험 모드를 끄면 남은 시험 캠페인도 발신 거부
     admin.put("/api/v1/settings", json={"policies": {"pilot_enabled": False}})
     assert agent.step().status != "CALLED"
+    # 단말 삭제: 기록 없는 단말은 완전 삭제, 통화 기록이 있는 단말은 목록에서 숨기고 토큰 폐기
+    spare = admin.post("/api/v1/devices", json={"name": "A24-여분", "kind": "a24"}).json()
+    assert admin.delete(f"/api/v1/devices/{spare['id']}").json()["mode"] == "deleted"
+    assert admin.delete(f"/api/v1/devices/{dev['id']}").json()["mode"] == "hidden"
+    assert all(x["id"] != dev["id"] for x in admin.get("/api/v1/devices").json())
+    with pytest.raises(ApiError):
+        agent.heartbeat()  # 폐기된 토큰
+    # 단말을 지워도 통화 기록은 남는다
+    assert admin.get(f"/api/v1/calls/{admin.get('/api/v1/reviews?state=ALL').json()[0]['id']}").status_code == 200
 
 
 def test_pilot_rejects_invalid_test_number(admin):
