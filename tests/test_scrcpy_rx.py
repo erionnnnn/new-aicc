@@ -371,3 +371,38 @@ def test_real_call_evidence_upgrades_capabilities(tmp_path):
     assert all(caps[k] == "supported" for k in ("dial", "hangup", "answer_detection", "rx_audio", "tx_audio", "recording"))
     rep = dev.evidence_report()
     assert rep["source"] == "auto_from_real_calls" and rep["probe_state"]["auto_evidence"]["calls"] == 2
+
+
+def test_a24_restarts_rx_each_call_and_releases():
+    """2026-10-29: 상대가 먼저 끊으면 수신 캡처가 계속 돌아 다음 통화가 앞 통화 소리를 이어받음."""
+    from aicc_agent.a24 import A24Device
+
+    class FakeAdb:
+        def __init__(self):
+            self.cmds = []
+
+        def run(self, *a, **k):
+            self.cmds.append(a)
+            return ""
+
+        def devices(self):
+            return [{"serial": "x", "state": "device"}]
+
+    class Rx:
+        def __init__(self):
+            self.starts = self.stops = 0
+
+        def start(self):
+            self.starts += 1
+
+        def stop(self):
+            self.stops += 1
+
+    rx = Rx()
+    dev = A24Device(FakeAdb(), rx=rx, tx=rx)
+    dev.dial("01012345678")
+    assert rx.starts == 1
+    dev.dial("01012345679")  # 앞 통화가 정리되지 않았어도 새로 시작
+    assert rx.starts == 2 and rx.stops >= 1
+    dev.release()
+    assert dev._rx_running is False

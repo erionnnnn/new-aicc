@@ -81,3 +81,16 @@ def test_recording_delete_is_not_contact_block():
     f2.answered()
     acts = f2.utterance("제 번호 삭제해 주세요", turn=f2.turn, event_id="r")
     assert any(isinstance(a, BlockContact) for a in acts)
+
+
+def test_cannot_work_ends_call():
+    """2026-10-29 실통화: '나 일 못해요' 에도 끊지 않고 대화를 이어감 → 정중히 마무리."""
+    from aicc_core.flow import HangUp
+    f = CallFlow(REF, clips=ALL, ai_conversation=True)
+    f.answered()
+    acts = f.utterance("나 일 못해요", turn=f.turn, event_id="c")
+    assert any(isinstance(a, HangUp) for a in acts) and f.finished and f.outcome == "UNCONFIRMED"
+    f2 = CallFlow(REF, clips=ALL, ai_conversation=True)
+    f2.answered()
+    acts = f2.utterance("지금은 일 못 해요, 다음 주 월요일부터 돼요", turn=f2.turn, event_id="d")
+    assert "confirm_date" in [a.key for a in acts if isinstance(a, Play)]  # 날짜가 있으면 날짜 우선

@@ -647,6 +647,12 @@ class CallRunner:
             if idle:
                 break
             self._safe_wait(300)
+        rel = getattr(self.device, "release", None)
+        if rel is not None:  # 상대가 먼저 끊어도 수신 캡처·송출을 정리(다음 통화에 앞 통화 소리가 섞이지 않게)
+            try:
+                rel()
+            except Exception as e:  # noqa: BLE001
+                log.warning("[통화 %s] 장치 정리 실패: %s", self.call_id[:8], e)
         self.client.finish(self.call_id, outcome=outcome, observation=self.flow.obs.as_dict(),
                            review_reasons=self.summary.review_reasons, phone_idle=idle)
         self._record_evidence(outcome, idle)

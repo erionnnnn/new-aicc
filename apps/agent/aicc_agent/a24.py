@@ -286,6 +286,10 @@ class A24Device(DeviceAdapter):
                 self._stop_rx()
                 raise
 
+    def release(self) -> None:
+        """통화가 끝나면(누가 끊었든) 수신 캡처·송출 모듈을 정리한다."""
+        self._stop_rx()
+
     def _stop_rx(self) -> None:
         if self.rx is not None and hasattr(self.rx, "stop") and self._rx_running:
             self.rx.stop()
@@ -296,6 +300,9 @@ class A24Device(DeviceAdapter):
     def dial(self, number: str) -> str:
         if not re.fullmatch(r"0\d{8,10}", number):
             raise DeviceError("발신 번호 형식 오류")
+        # 이전 통화의 수신·송출이 남아 있으면(상대가 먼저 끊은 경우 등) 반드시 새로 시작한다.
+        # 2026-10-29: 두 번째 통화가 앞 통화 대화를 이어감 — 상대가 끊으면 종료 명령이 없어 RX 캡처가 계속 돌았음
+        self._stop_rx()
         self.adb.run("shell", "am", "start", "-a", "android.intent.action.CALL", "-d", f"tel:{number}")
         try:
             self._start_rx()
