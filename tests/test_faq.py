@@ -104,3 +104,15 @@ def test_call_me_later_ends_politely(text):
     f.answered()
     acts = f.utterance(text, turn=f.turn, event_id="l")
     assert [a.key for a in acts if isinstance(a, Play)] == ["callback"] and f.outcome == "CALLBACK_REQUESTED"
+
+
+@pytest.mark.parametrize("text,key", [("나중에 다시 전화할게요", "sc_faq_will_call_back"),
+                                      ("나중에 정해지면 말씀드릴게요", "sc_faq_will_call_back"),
+                                      ("다음 주에 다시 물어봐 주세요", "sc_faq_ask_week_later"),
+                                      ("내일 대답할게요", "sc_faq_tomorrow_answer"),
+                                      ("내일 전화 주세요", "sc_faq_call_later_time")])
+def test_callback_requests_with_date_words_are_not_dates(text, key):
+    f = CallFlow(REF, clips=ALL, ai_conversation=True)
+    f.answered()
+    acts = f.utterance(text, turn=f.turn, event_id="t")
+    assert [a.key for a in acts if isinstance(a, Play)] == [key] and f.outcome == "CALLBACK_REQUESTED"
