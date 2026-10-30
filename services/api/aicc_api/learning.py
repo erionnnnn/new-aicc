@@ -151,22 +151,15 @@ def build_propose_prompt(items: list[dict], catalog: list[tuple[str, str]]) -> s
 
 
 def gemini_llm(prompt: str) -> str:  # pragma: no cover - 외부 API
-    from google import genai
-    from google.genai import types
+    """시나리오 제안용 글 모델(기본 GPT, OpenAI 키가 없으면 Gemini). 이름은 예전 호환."""
+    from aicc_agent import llm
 
     from .routers.admin import _read_agent_env
-    key = _read_agent_env().get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
-    if not key:
-        raise RuntimeError("Gemini 키가 없습니다(설정 > 단말 > 이 PC 에이전트)")
-    client = genai.Client(api_key=key)
-    cfg = types.GenerateContentConfig(temperature=0.2, max_output_tokens=4000, response_mime_type="application/json")
-    last = None
-    for m in ("gemini-3.8-flash", "gemini-3.5-flash-lite"):
-        try:
-            return client.models.generate_content(model=m, contents=prompt, config=cfg).text or ""
-        except Exception as e:  # noqa: BLE001
-            last = e
-    raise RuntimeError(f"제안 생성 실패: {last}")
+    env = {**os.environ, **_read_agent_env()}
+    try:
+        return llm.complete(prompt, json_mode=True, max_tokens=4000, timeout=120, env=env)
+    except llm.LLMError as e:
+        raise RuntimeError(f"제안 생성 실패: {e}") from None
 
 
 def _slug(hint: str) -> str:

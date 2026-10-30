@@ -92,16 +92,24 @@ def build_agent(env: dict[str, str], base: str):  # noqa: ANN201
     else:
         ai = FailingAI()  # 키가 없으면 예외 질문은 '상담 요청'으로 넘기고 날짜는 저장하지 않는다
     agent = Agent(client, dev, stt, ai)
-    if env.get("GEMINI_API_KEY") and env.get("AICC_AI_ROUTER", "1") != "0":
-        from .router import GeminiRouter
+    # 글 판단 AI(예상 밖 말 분석·녹음 답 고르기·통화 후 분석): OpenAI 키가 있으면 GPT, 없으면 Gemini(2026-10-30)
+    for k in ("OPENAI_API_KEY", "AICC_OPENAI_MODEL", "AICC_TEXT_LLM"):
+        if env.get(k):
+            os.environ[k] = env[k]
+        else:
+            os.environ.pop(k, None)
+    from . import llm
+    log.info("글 판단 AI: %s", llm.name())
+    if llm.available() and env.get("AICC_AI_ROUTER", "1") != "0":
+        from .router import LLMRouter
         try:
-            agent.runner.router = GeminiRouter(env["GEMINI_API_KEY"])  # 못 알아들은 말 → 녹음 답 고르기(2초 안팎)
+            agent.runner.router = LLMRouter()  # 못 알아들은 말 → 녹음 답 고르기
         except Exception as e:  # noqa: BLE001
             log.warning("녹음 답 고르기를 켜지 못했습니다: %s", e)
-    if env.get("GEMINI_API_KEY") and env.get("AICC_CALL_ANALYSIS", "1") != "0":
-        from .analysis import GeminiAnalyzer
+    if llm.available() and env.get("AICC_CALL_ANALYSIS", "1") != "0":
+        from .analysis import LLMAnalyzer
         try:
-            agent.runner.analyzer = GeminiAnalyzer(env["GEMINI_API_KEY"])  # 통화 후 AI 분석(제안 전용)
+            agent.runner.analyzer = LLMAnalyzer()  # 통화 후 AI 분석(제안 전용)
         except Exception as e:  # noqa: BLE001
             log.warning("통화 후 AI 분석을 켜지 못했습니다: %s", e)
     return agent

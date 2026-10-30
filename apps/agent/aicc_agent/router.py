@@ -33,7 +33,6 @@ ROUTER_PROMPT = """너는 간병사에게 다음 근무 가능 일정을 묻는 
 JSON 하나만 출력: {{"code": "코드 또는 NONE", "why": "짧은 이유"}}
 """
 
-ROUTER_MODELS = ("gemini-3.5-flash-lite", "gemini-3.8-flash")
 
 
 def build_candidates(scenarios, clips: set[str], examples: dict | None = None) -> list[tuple[str, str]]:  # noqa: ANN001
@@ -93,45 +92,37 @@ class MockRouter(RecordingRouter):
         return parse_choice(json.dumps({"code": self.answer or "NONE"}), {c for c, _ in candidates})
 
 
-class GeminiRouter(RecordingRouter):  # pragma: no cover - 외부 API
-    name = "gemini"
+class LLMRouter(RecordingRouter):  # pragma: no cover - 외부 API
+    """글 판단 AI(기본 GPT, 설정에 따라 Gemini)로 녹음 답 고르기."""
 
-    def __init__(self, api_key: str | None = None):
-        self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
-        if not self.api_key:
-            raise RuntimeError("GEMINI_API_KEY 가 필요합니다")
-        self._ok: str | None = None
-        self._client = None
+    def __init__(self, env: dict | None = None):
+        from . import llm
+        self.env = dict(os.environ) if env is None else env
+        if not llm.available(self.env):
+            raise RuntimeError("글 판단용 AI 키가 없습니다(OpenAI 또는 Gemini)")
+        self.name = llm.name(self.env)
 
-    def choose(self, text, goal, dialog, candidates, timeout_s=3.5):  # noqa: ANN001, ANN201
+    def choose(self, text, goal, dialog, candidates, timeout_s=3.0):  # noqa: ANN001, ANN201
         import concurrent.futures as cf
 
-        from google import genai
-        from google.genai import types
-        if self._client is None:
-            self._client = genai.Client(api_key=self.api_key)
+        from . import llm
         prompt = build_router_prompt(text, goal, dialog, candidates)
-        cfg = types.GenerateContentConfig(temperature=0.0, max_output_tokens=80, response_mime_type="application/json")
-        models = [m for m in dict.fromkeys((self._ok, os.environ.get("AICC_ROUTER_MODEL"), *ROUTER_MODELS)) if m]
-
-        def work() -> str | None:
-            for m in models:
-                try:
-                    r = self._client.models.generate_content(model=m, contents=prompt, config=cfg)
-                    self._ok = m
-                    return parse_choice(r.text or "", {c for c, _ in candidates})
-                except Exception as e:  # noqa: BLE001
-                    log.warning("녹음 선택 %s 실패: %s", m, str(e)[:120])
-            return None
-
         t0 = time.monotonic()
         ex = cf.ThreadPoolExecutor(max_workers=1)
         try:
-            code = ex.submit(work).result(timeout=timeout_s)
+            raw = ex.submit(llm.complete, prompt, json_mode=True, max_tokens=80, timeout=timeout_s + 2,
+                            env=self.env).result(timeout=timeout_s)
         except cf.TimeoutError:
-            log.info("AI 녹음 선택: 시간 초과(%dms)", int((time.monotonic() - t0) * 1000))
+            log.info("AI 녹음 선택(%s): 시간 초과(%dms)", self.name, int((time.monotonic() - t0) * 1000))
+            return None
+        except Exception as e:  # noqa: BLE001
+            log.warning("AI 녹음 선택(%s) 실패: %s", self.name, str(e)[:150])
             return None
         finally:
             ex.shutdown(wait=False)
-        log.info("AI 녹음 선택: %s (%dms)", code or "없음", int((time.monotonic() - t0) * 1000))
+        code = parse_choice(raw, {c for c, _ in candidates})
+        log.info("AI 녹음 선택(%s): %s (%dms)", self.name, code or "없음", int((time.monotonic() - t0) * 1000))
         return code
+
+
+GeminiRouter = LLMRouter  # 예전 이름 호환

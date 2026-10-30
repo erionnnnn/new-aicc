@@ -395,6 +395,8 @@ function PilotPanel({ me }: { me: Me }) {
     setErr(null); setMsg("");
     const key = f.get("gclear") === "on" ? "" : String(f.get("gkey") || "").trim();
     const keyChanged = f.get("gclear") === "on" || key.length > 0;
+    const okey = f.get("oclear") === "on" ? "" : String(f.get("okey") || "").trim();
+    const okeyChanged = f.get("oclear") === "on" || okey.length > 0;
     try {
       await api.put("/api/v1/local-agent", {
         whisper_model: f.get("wmodel"), tx_device: f.get("tx") ?? "", gemini_model: f.get("gmodel") ?? "",
@@ -404,6 +406,8 @@ function PilotPanel({ me }: { me: Me }) {
         vs_voice: String(f.get("vsvoice") ?? "").trim(), vs_voice_male: String(f.get("vsvoicem") ?? "").trim(),
         vs_instruct: String(f.get("vsinst") ?? "").trim(),
         ...(keyChanged ? { gemini_api_key: key } : {}),
+        ...(okeyChanged ? { openai_api_key: okey } : {}),
+        openai_model: String(f.get("omodel") ?? "").trim(), text_llm: String(f.get("tllm") ?? ""),
       });
       setMsg("에이전트 설정을 저장했습니다. 몇 초 뒤 에이전트가 다시 시작됩니다."); la.reload();
     } catch (e2) { setErr(e2 as ApiError); }
@@ -468,6 +472,24 @@ function PilotPanel({ me }: { me: Me }) {
               <label className="inline"><input type="checkbox" name="gclear" /> 저장된 Gemini 키 삭제</label>
             )}
           </div>
+          <h3>예상 밖 말 판단(GPT)</h3>
+          <p className="muted small">규칙으로 못 알아들은 말의 뜻 파악·녹음 답 고르기·AI 답 문장·통화 후 분석·시나리오 제안은 GPT가 하고,
+            목소리(안내 녹음·AI 답 읽기)와 음성 인식은 지금처럼 Gemini가 합니다. OpenAI 키가 없으면 전부 Gemini로 합니다.</p>
+          <div className="grid3">
+            <Field label={`OpenAI API 키${a.has_openai_key ? " (저장됨 — 바꿀 때만 입력)" : ""}`}>
+              <input name="okey" type="text" autoComplete="off" spellCheck={false} data-lpignore="true" data-1p-ignore
+                     style={{ WebkitTextSecurity: "disc" } as any} placeholder="sk-..." />
+            </Field>
+            <Field label="GPT 모델(선택)" hint="비워 두면 gpt-5.4-mini">
+              <input name="omodel" defaultValue={a.openai_model} placeholder="gpt-5.4-mini" autoComplete="off" />
+            </Field>
+            <Field label="판단 AI 선택">
+              <select name="tllm" defaultValue={a.text_llm ?? ""}>
+                <option value="">자동(OpenAI 키가 있으면 GPT)</option><option value="openai">GPT</option><option value="gemini">Gemini</option>
+              </select>
+            </Field>
+          </div>
+          {a.has_openai_key && <label className="inline"><input type="checkbox" name="oclear" /> 저장된 OpenAI 키 삭제</label>}
           <h3>VoiceStudio(이 PC 무료 음성 프로그램)</h3>
           <p className="muted small">VoiceStudio 에서 만든 목소리 프로필 이름을 넣으면 ‘안내 음성 &gt; VoiceStudio로 전체 만들기’와 통화 중 AI 답이 그 목소리로 나옵니다.
             모델 라이선스는 사용 전 회사 기준으로 확인하세요.</p>

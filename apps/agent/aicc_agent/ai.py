@@ -218,7 +218,8 @@ class GeminiTTSAI(ExceptionAI):  # pragma: no cover - 외부 API
     def respond(self, question: str, *, timeout_s: float = 10.0, context: str | None = None) -> AIReply:
         """단계별 시간을 기록한다(2026-10-29 실통화: 원인 모를 TimeoutError 로 '잠시만요' 뒤 침묵).
 
-        - gemini-live 음원팩: Live 모델이 답 문장과 목소리를 한 번에 만든다(같은 Live 목소리, 왕복 1회)
+        - 답 문장은 글 판단 AI(OpenAI 키가 있으면 GPT, 2026-10-30 사용자 결정 'GPT 가 분석, Gemini 가 답변')
+        - gemini-live 음원팩: GPT 를 안 쓰면 Live 모델이 글+목소리를 한 번에, GPT 를 쓰면 GPT 글 → Live 목소리로 읽기
         - melo: 글 모델(최대 5초) + 이 PC MeloTTS
         - gemini: 글 모델 + Gemini TTS. 통화 중에는 분당 한도에 걸려도 기다리지 않고 바로 실패 처리
         """
@@ -228,7 +229,8 @@ class GeminiTTSAI(ExceptionAI):  # pragma: no cover - 외부 API
         pack = "male" if self.voice == "Charon" else "female"
         engine = self._engine(pack)
         t0 = time.monotonic()
-        if engine == "gemini-live":
+        from . import llm as _llm
+        if engine == "gemini-live" and _llm.provider() != "openai":
             if getattr(self, "_live", None) is None:
                 self._live = GeminiLiveAI(self.api_key)
             self._live.voice = self.voice
@@ -238,22 +240,16 @@ class GeminiTTSAI(ExceptionAI):  # pragma: no cover - 외부 API
         stage = {"name": "글 생성", "t": t0}
 
         def work() -> tuple[str, bytes]:
-            from google import genai
-            from google.genai import types
-            client = genai.Client(api_key=self.api_key)  # 시간 제한은 아래 작업 전체 timeout 으로(API 최소 deadline 10초라 5초 지정 시 400 오류, 2026-10-29)
-            cfg = types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT, max_output_tokens=120, temperature=0.6)
-            text, err = "", ""
-            for m in [x for x in dict.fromkeys((self._ok_model, os.environ.get("AICC_GEMINI_TEXT_MODEL"), *TEXT_MODELS)) if x]:
-                try:
-                    r = client.models.generate_content(model=m, contents=context or question, config=cfg)
-                    text = (r.text or "").strip()
-                    if text:
-                        self._ok_model = m
-                        break
-                except Exception as e:  # noqa: BLE001
-                    err = f"{m}: {type(e).__name__}: {str(e)[:120]}"
+            # 답 문장: 글 판단 AI(기본 GPT, 2026-10-30 사용자 결정) / 목소리: 안내 녹음과 같은 엔진(Gemini 등)
+            from . import llm
+            try:
+                text = llm.complete(context or question, system=SYSTEM_PROMPT, max_tokens=120,
+                                    timeout=max(3.0, timeout_s - 1))
+            except llm.LLMError as e:
+                raise RuntimeError(f"글 생성 실패: {e}") from None
             if not text:
-                raise RuntimeError(f"글 생성 실패: {err or '빈 답'}")
+                raise RuntimeError("글 생성 실패: 빈 답")
+            self._ok_model = llm.name()
             text = limit_sentences(text)
             t_text = time.monotonic()
             lg.info("AI 단계: 글 생성 %dms (%s)", int((t_text - t0) * 1000), self._ok_model)
@@ -261,6 +257,8 @@ class GeminiTTSAI(ExceptionAI):  # pragma: no cover - 외부 API
             from aicc_api import tts
             if engine == "voicestudio":
                 wav = tts.synth_voicestudio(text, pack)
+            elif engine == "gemini-live":  # GPT 가 만든 문장을 안내 녹음과 같은 Live 목소리로 읽음
+                wav = tts.synth_gemini_live(text, pack, self.api_key)
             elif engine == "melo":
                 wav = tts.synth_melo(text, pack, timeout=max(2.0, timeout_s - (t_text - t0)))
             else:

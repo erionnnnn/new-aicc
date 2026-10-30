@@ -748,6 +748,7 @@ def purge(p: Principal = Depends(current_user), db: Session = Depends(get_db)) -
 
 # ------------------ 이 PC 에이전트 설정(통합 실행 프로그램 전용) ------------------
 AGENT_KEYS = {"AICC_STT_ENGINE", "AICC_WHISPER_MODEL", "AICC_TX_DEVICE", "AICC_GEMINI_MODEL", "GEMINI_API_KEY",
+              "OPENAI_API_KEY",
               "AICC_ADB_SERIAL"}
 
 
@@ -779,6 +780,8 @@ def local_agent(p: Principal = Depends(current_user)) -> dict:
         "tx_adb_target": env.get("AICC_TX_ADB_TARGET") or "", "tx_rate": env.get("AICC_TX_RATE") or "16000",
         "tx_channels": env.get("AICC_TX_CHANNELS") or "1", "tx_start_cmd": env.get("AICC_TX_START_CMD") or "",
         "has_gemini_key": bool(env.get("GEMINI_API_KEY")),  # 키 원문은 돌려주지 않는다
+        "has_openai_key": bool(env.get("OPENAI_API_KEY")), "openai_model": env.get("AICC_OPENAI_MODEL") or "",
+        "text_llm": env.get("AICC_TEXT_LLM") or "",
         "vs_url": env.get("AICC_VS_URL") or "", "vs_model": env.get("AICC_VS_MODEL") or "",
         "vs_voice": env.get("AICC_VS_VOICE") or "", "vs_voice_male": env.get("AICC_VS_VOICE_MALE") or "",
         "vs_instruct": env.get("AICC_VS_INSTRUCT") or "", "ai_voice": env.get("AICC_AI_VOICE") or "",
@@ -793,6 +796,9 @@ class LocalAgentIn(BaseModel):
     tx_device: str | None = Field(default=None, max_length=200)
     gemini_model: str | None = Field(default=None, max_length=100, pattern=r"^$|^(models/)?gemini[A-Za-z0-9_.\-]*$")
     gemini_api_key: str | None = Field(default=None, max_length=200)  # 빈 문자열이면 삭제, None 이면 유지
+    openai_api_key: str | None = Field(default=None, max_length=300)  # 글 판단 AI(GPT). 빈 문자열이면 삭제
+    openai_model: str | None = Field(default=None, max_length=60, pattern=r"^$|^[A-Za-z0-9_.\-]+$")
+    text_llm: str | None = Field(default=None, pattern="^(|openai|gemini)$")
     tx_adb_target: str | None = Field(default=None, max_length=140,
                                 pattern=r"^$|^(tcp:[0-9]+|localabstract:[A-Za-z0-9_.\-]+|localfilesystem:[A-Za-z0-9_./\-]+)$")
     tx_rate: str | None = Field(default=None, pattern="^(8000|16000|24000|32000|44100|48000)$")
@@ -823,6 +829,11 @@ def put_local_agent(body: LocalAgentIn, p: Principal = Depends(current_user), db
         extra["AICC_GEMINI_MODEL"] = body.gemini_model
     if body.gemini_api_key is not None:
         extra["GEMINI_API_KEY"] = body.gemini_api_key
+    if body.openai_api_key is not None:
+        k = body.openai_api_key.strip()
+        if k and not k.startswith("sk-"):
+            raise AppError(422, "OPENAI_KEY_FORMAT", "OpenAI 키는 보통 sk- 로 시작합니다. 브라우저가 비밀번호를 자동으로 채웠는지 확인하세요")
+        extra["OPENAI_API_KEY"] = k
     if body.uplink_jar:
         from pathlib import Path as _P
         jp = _P(body.uplink_jar.strip().strip('"'))
@@ -833,12 +844,13 @@ def put_local_agent(body: LocalAgentIn, p: Principal = Depends(current_user), db
                        ("tx_channels", "AICC_TX_CHANNELS"), ("tx_start_cmd", "AICC_TX_START_CMD"),
                        ("vs_url", "AICC_VS_URL"), ("vs_model", "AICC_VS_MODEL"), ("vs_voice", "AICC_VS_VOICE"),
                        ("vs_voice_male", "AICC_VS_VOICE_MALE"), ("vs_instruct", "AICC_VS_INSTRUCT"),
-                       ("ai_voice", "AICC_AI_VOICE")):
+                       ("ai_voice", "AICC_AI_VOICE"), ("openai_model", "AICC_OPENAI_MODEL"),
+                       ("text_llm", "AICC_TEXT_LLM")):
         v = getattr(body, field)
         if v is not None:
             extra[key] = v
     _write_agent_env(None, None, extra)  # 파일이 바뀌면 통합 실행 프로그램이 에이전트를 다시 시작한다
     audit(db, p, "local_agent.update", "organization", p.org.id,
-          {k: ("***" if k == "GEMINI_API_KEY" else v) for k, v in extra.items()})
+          {k: ("***" if k in ("GEMINI_API_KEY", "OPENAI_API_KEY") else v) for k, v in extra.items()})
     db.commit()
     return {"ok": True}

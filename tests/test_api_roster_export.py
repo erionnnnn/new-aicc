@@ -309,3 +309,9 @@ def test_refresh_texts_shortens_old_opening(admin):
     admin.post("/api/v1/voice-packs/female/tts", json={"engine": "test", "only_missing": True})
     r2 = admin.post("/api/v1/voice-packs/female/refresh-texts").json()
     assert "opening" not in r2["changed"]
+
+
+def test_openai_key_format_checked(admin, monkeypatch):
+    monkeypatch.setenv("AICC_LOCAL_AGENT", "1")
+    r = admin.put("/api/v1/local-agent", json={"openai_api_key": "mypassword123"})
+    assert r.status_code == 422 and "sk-" in r.text

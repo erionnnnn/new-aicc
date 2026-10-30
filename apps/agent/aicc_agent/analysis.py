@@ -138,34 +138,30 @@ class MockAnalyzer(CallAnalyzer):
         return parse_analysis(self.response, today)
 
 
-ANALYSIS_MODELS = ("gemini-3.5-flash-lite", "gemini-3.8-flash")
 
 
-class GeminiAnalyzer(CallAnalyzer):  # pragma: no cover - 외부 API
-    name = "gemini"
+class LLMAnalyzer(CallAnalyzer):  # pragma: no cover - 외부 API
+    """통화 후 분석(글 판단 AI: 기본 GPT, 설정에 따라 Gemini)."""
 
-    def __init__(self, api_key: str | None = None):
-        self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
-        if not self.api_key:
-            raise RuntimeError("GEMINI_API_KEY 가 필요합니다")
-        self._ok: str | None = None
+    def __init__(self, env: dict | None = None):
+        from . import llm
+        self.env = dict(os.environ) if env is None else env
+        if not llm.available(self.env):
+            raise RuntimeError("글 판단용 AI 키가 없습니다(OpenAI 또는 Gemini)")
+        self.name = llm.name(self.env)
 
     def analyze(self, lines: list[str], today: date) -> dict | None:
-        from google import genai
-        from google.genai import types
-        client = genai.Client(api_key=self.api_key)
-        cfg = types.GenerateContentConfig(temperature=0.1, max_output_tokens=600,
-                                          response_mime_type="application/json")
-        prompt = build_analysis_prompt(lines, today)
-        models = [m for m in (self._ok, os.environ.get("AICC_ANALYSIS_MODEL"), *ANALYSIS_MODELS) if m]
-        for m in dict.fromkeys(models):
-            try:
-                r = client.models.generate_content(model=m, contents=prompt, config=cfg)
-                out = parse_analysis(r.text or "", today)
-                if out is not None:
-                    self._ok = m
-                    out["model"] = m
-                    return out
-            except Exception as e:  # noqa: BLE001
-                log.warning("통화 분석 %s 실패: %s: %s", m, type(e).__name__, str(e)[:150])
-        return None
+        from . import llm
+        try:
+            raw = llm.complete(build_analysis_prompt(lines, today), json_mode=True, max_tokens=600, timeout=30,
+                               env=self.env)
+        except llm.LLMError as e:
+            log.warning("통화 분석 실패(%s): %s", self.name, e)
+            return None
+        out = parse_analysis(raw, today)
+        if out is not None:
+            out["model"] = self.name
+        return out
+
+
+GeminiAnalyzer = LLMAnalyzer  # 예전 이름 호환
