@@ -265,6 +265,25 @@ class CallFlow:
             return [self._play(check)]  # "제 말 들리실까요? 근무 가능하신 일정만 말씀해주시면 됩니다."
         return [self._question()]
 
+    def ai_routed(self, code: str, *, turn: int, event_id: str) -> list[Action] | None:
+        """AI 가 녹음된 답 중 하나를 고름(2026-10-30). 원래 질문 단계로 돌아가 그 상황 응답을 실행한다.
+        고른 답을 쓸 수 없으면(녹음 없음·날짜가 섞임 등) None → 기존 AI 답으로."""
+        if self.finished or self.state != "AI_EXCEPTION" or turn != self.turn:
+            return None
+        sc = BY_CODE.get(code)
+        if sc is None or not self._has(sc.key):
+            return None
+        q = self.transcript[-1]["text"] if self.transcript else ""
+        back = self.return_state or "ASK_AVAILABLE_DATE"
+        self.state, self.return_state = back, None
+        it = interpret(q, back, self.reference)
+        acts = self._scenario(q, it, event_id, forced=sc)
+        if acts is None:
+            self.state, self.return_state = "AI_EXCEPTION", back
+            return None
+        self.obs.history.append({"event": "AI_ROUTED", "code": code})
+        return acts
+
     def ai_done(self, *, turn: int) -> list[Action]:
         if self.finished or self.state != "AI_EXCEPTION" or turn != self.turn:
             return []
@@ -487,9 +506,9 @@ class CallFlow:
     def _has(self, key: str) -> bool:
         return key in self.clips
 
-    def _scenario(self, text: str, it: Interpretation, eid: str) -> list[Action] | None:
+    def _scenario(self, text: str, it: Interpretation, eid: str, forced: Scenario | None = None) -> list[Action] | None:
         """녹음된 상황 응답(기존 ars_scenarios). 해당 없거나 일정 답이 함께 있으면 None(기존 흐름으로)."""
-        s: Scenario | None = match_scenario(text)
+        s: Scenario | None = forced or match_scenario(text)
         if s is None:
             return None
         # '월요일부터 금요일만'처럼 요일 이름만 있는 평일·주말 선호는 날짜 답이 아니다

@@ -92,6 +92,12 @@ def build_agent(env: dict[str, str], base: str):  # noqa: ANN201
     else:
         ai = FailingAI()  # 키가 없으면 예외 질문은 '상담 요청'으로 넘기고 날짜는 저장하지 않는다
     agent = Agent(client, dev, stt, ai)
+    if env.get("GEMINI_API_KEY") and env.get("AICC_AI_ROUTER", "1") != "0":
+        from .router import GeminiRouter
+        try:
+            agent.runner.router = GeminiRouter(env["GEMINI_API_KEY"])  # 못 알아들은 말 → 녹음 답 고르기(2초 안팎)
+        except Exception as e:  # noqa: BLE001
+            log.warning("녹음 답 고르기를 켜지 못했습니다: %s", e)
     if env.get("GEMINI_API_KEY") and env.get("AICC_CALL_ANALYSIS", "1") != "0":
         from .analysis import GeminiAnalyzer
         try:

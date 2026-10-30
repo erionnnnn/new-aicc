@@ -269,7 +269,9 @@ def test_import_legacy_recordings_zip(admin):
                      headers=admin._h())
     assert r.status_code == 200 and "closing" in r.json()["imported"]
     r = admin.post("/api/v1/voice-packs/female/refresh-texts")
-    assert r.status_code == 200 and r.json()["changed"] == []  # 이미 최신
+    # 2026-10-30: 예전 오프닝(근무 확인차 연락드렸습니다)은 짧은 새 오프닝으로 바뀐다. 그 밖에는 이미 최신
+    assert r.status_code == 200 and r.json()["changed"] == ["opening"]
+    assert admin.post("/api/v1/voice-packs/female/refresh-texts").json()["changed"] == []
 
 
 def test_import_script_named_recordings(admin):
@@ -291,3 +293,19 @@ def test_import_script_named_recordings(admin):
     assert {"opening", "month_10", "sc_ask_pay"} <= set(out["imported"])
     assert out["bad_files"] == ["081_closing.flac"] and "closing" not in out["imported"]
     assert out["clips"]["opening"]["has_file"] and out["clips"]["opening"]["text"].startswith("안녕하세요, 선생님")
+
+
+def test_refresh_texts_shortens_old_opening(admin):
+    """2026-10-30: 10초 오프닝('…자동 안내입니다…') → 짧은 오프닝으로. 이미 새 문구면 다시 바꾸지 않는다."""
+    admin.put("/api/v1/settings", json={"company_name": "좋은간병"})
+    admin.get("/api/v1/voice-packs")
+    old = ("안녕하세요. 좋은간병에서 근무 일정 확인을 맡고 있는 김태희 실장의 자동 안내입니다. "
+           "전담 실장님과는 별도로 다음 근무 가능 일정을 확인드리고 있어요. 잠시 통화 괜찮으실까요?")
+    admin.put("/api/v1/voice-packs/female", json={"speaker_name": "김태희", "texts": {"opening": old}})
+    admin.post("/api/v1/voice-packs/female/tts", json={"engine": "test"})
+    r = admin.post("/api/v1/voice-packs/female/refresh-texts").json()
+    assert "opening" in r["changed"]
+    assert "자동 안내" not in r["clips"]["opening"]["text"] and "잠깐 통화 괜찮으세요" in r["clips"]["opening"]["text"]
+    admin.post("/api/v1/voice-packs/female/tts", json={"engine": "test", "only_missing": True})
+    r2 = admin.post("/api/v1/voice-packs/female/refresh-texts").json()
+    assert "opening" not in r2["changed"]

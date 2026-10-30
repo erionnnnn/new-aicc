@@ -49,6 +49,7 @@ class RunnerConfig:
     ring_timeout_ms: int = 40000
     poll_ms: int = 200
     listen_ms: int = 40           # 재생 중 상대 음성 확인 간격
+    router_timeout_s: float = 3.5  # 녹음 답 고르기 최대 대기(넘으면 기존 AI 답으로)
     hangup_tail_ms: int = 1200     # 마지막 안내가 끝난 뒤 끊기 전 여유(휴대폰 송출 지연만큼)
     analysis_async: bool = True   # 통화 후 AI 분석을 백그라운드로(다음 통화를 늦추지 않음)
     greeting_wait_ms: int = 1500  # 받자마자 '여보세요' 하는 동안 기다림
@@ -129,6 +130,7 @@ class CallRunner:
         self.ai = ai
         self.cfg = config or RunnerConfig()
         self.stop_requested = False
+        self.router = None  # 녹음 답 고르기(AI). launcher 가 키가 있을 때 붙인다
         self.analyzer = None  # 통화 후 AI 분석기(제안 전용). launcher 가 키가 있을 때 붙인다
 
     # ---------------- 이벤트 ----------------
@@ -593,9 +595,42 @@ class CallRunner:
                 out.append(f"간병사: {e[1]}")
         return out
 
+    def _route(self, a: StartAI) -> bool:
+        """먼저 녹음된 답 중에서 고르기(빠름·같은 목소리·지어내지 않음). 골랐으면 True."""
+        rt = getattr(self, "router", None)
+        if rt is None or self.is_mock and rt.name != "mock":
+            return False
+        from aicc_core.scenarios import SCENARIOS
+
+        from .ai import STATE_GOAL
+        from .router import build_candidates
+        clips = {k for k, c in (self.voice.manifest.get("clips") or {}).items() if c.get("file")} \
+            if hasattr(self.voice, "manifest") else set()
+        cands = build_candidates(SCENARIOS, clips)
+        if not cands:
+            return False
+        t0 = time.monotonic()
+        try:
+            code = rt.choose(a.question, STATE_GOAL.get(a.return_state or "", "다음 근무 가능 일정"), self._dialog_lines(),
+                             cands, timeout_s=self.cfg.router_timeout_s)
+        except Exception as e:  # noqa: BLE001
+            log.warning("[통화 %s] 녹음 선택 실패: %s", self.call_id[:8], e)
+            return False
+        if not code or self.flow.turn != a.turn:
+            return False
+        acts = self.flow.ai_routed(code, turn=a.turn, event_id=new_event_id())
+        if acts is None:
+            return False
+        self._emit("ai.routed", a.turn, {"code": code, "latency_ms": int((time.monotonic() - t0) * 1000)})
+        log.info("[통화 %s] AI 녹음 선택: %s (%dms)", self.call_id[:8], code, int((time.monotonic() - t0) * 1000))
+        self._apply(acts)
+        return True
+
     def _ai(self, a: StartAI) -> None:
         self._emit("ai.start", a.turn, {"return_state": a.return_state})
         self._flush()
+        if self._route(a):
+            return
         with cf.ThreadPoolExecutor(max_workers=1) as ex:
             ctx = build_prompt(a.question, a.return_state, self._dialog_lines())
             fut = ex.submit(self.ai.respond, a.question, timeout_s=self.cfg.ai_timeout_s, context=ctx)

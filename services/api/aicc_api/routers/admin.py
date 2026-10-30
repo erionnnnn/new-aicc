@@ -460,9 +460,23 @@ def refresh_texts(key: str, p: Principal = Depends(current_user), db: Session = 
     cur = services.latest_pack(db, p.org.id, key)
     if cur is None:
         raise AppError(404, "NOT_FOUND", "음원팩이 없습니다")
+    from aicc_core.voicepack import OLD_OPENING_MARKERS, OPENING_TEXT, VARIANT_TEXTS
     m = with_optional(cur.manifest)
     changed = []
+    # 오프닝 단축(2026-10-30): 예전 기본·기존 녹음 오프닝이면 새 문구로(직접 고친 문구는 그대로)
+    for clip, text in (("opening", OPENING_TEXT), ("opening__v2", VARIANT_TEXTS["opening__v2"])):
+        c = m["clips"].get(clip)
+        if c is None:
+            continue
+        old = c.get("text") or ""
+        co = p.org.company_name.strip()
+        if old != text and _apply_company(old, co) != _apply_company(text, co) and \
+                (not old or any(mk in old for mk in OLD_OPENING_MARKERS)):
+            c.update(text=text, file=None, source="regen:refresh")
+            changed.append(clip)
     for clip, text in CURRENT_TEXTS.items():
+        if clip in ("opening", "opening__v2"):
+            continue
         c = m["clips"].get(clip)
         if c is None:
             continue

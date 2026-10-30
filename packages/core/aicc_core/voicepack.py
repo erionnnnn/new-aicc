@@ -32,7 +32,7 @@ FULL_CONFIRM_KEYS = tuple(f"confirm_{m:02d}_{d:02d}" for m, d in _ALL_DAYS)
 END_ACK_KEYS = tuple(f"endack_{m:02d}_{d:02d}" for m, d in _ALL_DAYS)
 # 같은 상황의 다른 표현(매번 같은 말만 반복하면 기계처럼 들림) — 녹음된 것 중 무작위로 고른다
 VARIANT_TEXTS = {
-    "opening__v2": "안녕하세요, 선생님. 좋은간병입니다. 다음 근무 일정 확인차 연락드렸어요.",
+    "opening__v2": "안녕하세요, 선생님. [회사명]입니다. 다음 근무 일정 여쭤보려고 연락드렸어요. 잠깐 통화 괜찮으세요?",
     "ask_available_date__v2": "네, 그럼 다음 근무는 언제부터 가능하세요?",
     "ask_available_date__v3": "네, 선생님. 언제부터 근무하실 수 있으세요?",
     "ask_end_date__v2": "아, 지금 일하고 계시는군요. 지금 근무는 언제쯤 끝나세요?",
@@ -71,10 +71,14 @@ OPTIONAL_KEYS = ("ack",) + SCENARIO_KEYS + tuple(EXTRA_TEXTS) + tuple(VARIANT_TE
 DATE_PIECE_KEYS = tuple(f"month_{m}" for m in range(1, 13)) + tuple(f"day_{d}" for d in range(1, 32))
 PLACEHOLDER_MARKERS = ("[회사명]", "PLACEHOLDER", "TODO", "자리표시자", "[이름]")
 
+OPENING_TEXT = "안녕하세요, 선생님. [회사명]입니다. 다음 근무 일정 확인차 연락드렸어요. 잠깐 통화 괜찮으세요?"
+# 예전 오프닝 문구(이 표시가 있으면 '최신 문구로 맞추기'가 새 오프닝으로 바꾼다)
+OLD_OPENING_MARKERS = ("자동 안내입니다", "근무 확인차 연락드렸습니다", "다음 근무 일정 확인차 연락드렸어요.")
+
 # 기본 스크립트 초안(설계 03 오프닝 초안 기반). 실제 녹음 전 관리자가 승인해야 한다.
 DEFAULT_SCRIPTS = {
-    "opening": "안녕하세요. [회사명]에서 근무 일정 확인을 맡고 있는 {speaker}의 자동 안내입니다. "
-               "전담 실장님과는 별도로 다음 근무 가능 일정을 확인드리고 있어요. 잠시 통화 괜찮으실까요?",
+    # 2026-10-30 사용자 결정: 10초 오프닝 → 5초 안팎, '자동 안내입니다' 문구 제외(물어보면 자동 안내라고 답함)
+    "opening": OPENING_TEXT,
     "ask_working": "지금 간병 근무 중이신가요?",
     "ask_end_date": "현재 근무는 언제까지 하실 예정이세요?",
     "ask_available_date": "그럼 다음 근무는 며칠부터 가능하세요?",
