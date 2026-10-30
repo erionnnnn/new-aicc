@@ -155,3 +155,31 @@ def test_scenario_set_ignores_bad_ext():
     flow = CallFlow(REF, clips=set(SCENARIO_KEYS), ai_conversation=True)
     flow.answered()
     assert any(isinstance(a, StartAI) for a in flow.utterance("엘리베이터는 있나요", turn=flow.turn, event_id="z"))
+
+
+def test_review_fixes_2026_10_30(admin, monkeypatch):
+    """코드 리뷰 반영: 차단 답에 표현 추가 금지, 네/아니요·날짜 같은 말은 표현으로 못 씀, 빈 칸만 생기면 음원 승인 유지."""
+    _seed_real_call(admin)
+
+    def llm(prompt):
+        return json.dumps({"proposals": [
+            {"action": "ADD_EXAMPLES", "target_code": "CUSTOM_DELETE_REVIEW", "examples": [0]},   # 연락처 삭제(차단) → 버림
+            {"action": "NEW", "code_hint": "OK_SURE", "kind": "INFO", "examples": [0, 1],
+             "text": "네, 시설은 실제 일감 소개 때 안내드릴게요. 언제부터 가능하세요?"}]})
+    monkeypatch.setattr(learning, "gemini_llm", llm)
+    admin.post("/api/v1/scenario-proposals/generate", json={"days": 7})
+    props = admin.get("/api/v1/scenario-proposals").json()
+    assert all(p["target_code"] != "CUSTOM_DELETE_REVIEW" for p in props)
+    new = next(p for p in props if p["action"] == "NEW")
+    bad = admin.post(f"/api/v1/scenario-proposals/{new['id']}/recheck",
+                     json={"edits": {"examples": ["네 알겠어요", "엘리베이터는 있나요"]}}).json()
+    assert not bad["checks"]["ok"] and any("단순" in e for e in bad["checks"]["errors"])
+    # 음원팩이 승인된 상태에서, 녹음 엔진이 없어 빈 칸만 생기면 승인 유지
+    admin.put("/api/v1/settings", json={"company_name": "좋은간병"})
+    admin.put("/api/v1/voice-packs/female", json={"speaker_name": "김태희"})
+    admin.post("/api/v1/voice-packs/female/tts", json={"engine": "test"})
+    assert admin.post("/api/v1/voice-packs/female/approve").status_code == 200
+    r = admin.post(f"/api/v1/scenario-proposals/{new['id']}/approve", json={})
+    assert r.status_code == 200 and "녹음 필요" in r.json()["voice"]["female"]
+    pack = next(p for p in admin.get("/api/v1/voice-packs").json() if p["key"] == "female")
+    assert pack["approved_by"] and "sc_lrn_ok_sure" in pack["clips"]

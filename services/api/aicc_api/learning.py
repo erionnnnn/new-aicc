@@ -73,8 +73,16 @@ def collect(db: Session, org_id: str, days: int = 7) -> dict:
     unmatched: list[dict] = []
     plays: dict[str, int] = {}
     hang_after: dict[str, int] = {}
+    # 통화마다 따로 조회하지 않고 필요한 이벤트만 한 번에(리뷰 2026-10-30: 통화 수만큼 조회 → 통계 화면이 느려짐)
+    types = ("utterance.final", "ai.start", "ai.routed", "ai.done", "call.remote_hangup", "play")
+    by_call: dict[str, list] = {}
+    ids = [c.id for c in calls]
+    for i0 in range(0, len(ids), 500):
+        for e in db.scalars(select(CallEvent).where(CallEvent.call_id.in_(ids[i0:i0 + 500]), CallEvent.type.in_(types))
+                            .order_by(CallEvent.call_id, CallEvent.seq)):
+            by_call.setdefault(e.call_id, []).append(e)
     for c in calls:
-        evs = list(db.scalars(select(CallEvent).where(CallEvent.call_id == c.id).order_by(CallEvent.seq)))
+        evs = by_call.get(c.id, [])
         last_utt = None
         for i, e in enumerate(evs):
             pl = e.payload or {}
@@ -174,7 +182,7 @@ def _clean_draft(p: dict, items: list[dict], codes: set[str]) -> tuple[str, str 
         return None
     if action == "ADD_EXAMPLES":
         tc = p.get("target_code")
-        if tc not in codes:
+        if tc not in codes:  # codes: 표현을 더할 수 있는 답(INFO·REVIEW·PREF·END)만 — 연락처 삭제(차단)·흐름 안내 제외
             return None
         return "ADD_EXAMPLES", tc, {"examples": examples}
     if action == "NEW":
@@ -208,7 +216,7 @@ def generate(db: Session, org: Organization, llm=gemini_llm, days: int = 7) -> l
     # (a) AI 고르기로 이미 연결된 말 → 그 답의 표현 추가(글 모델 없이)
     by_code: dict[str, list[dict]] = {}
     for it in fresh:
-        if it["routed"] and it["routed"] in sset.by_code:
+        if it["routed"] and it["routed"] in sset.by_code and sset.by_code[it["routed"]].kind in EDITABLE_KINDS:
             by_code.setdefault(it["routed"], []).append(it)
     for code, its in by_code.items():
         made.append(_new_proposal(db, org, "ADD_EXAMPLES", code, {"examples": [x["text"] for x in its][:10]}, its, ext))
@@ -223,7 +231,7 @@ def generate(db: Session, org: Organization, llm=gemini_llm, days: int = 7) -> l
         except json.JSONDecodeError:
             props = []
         for p in props[:30]:
-            c = _clean_draft(p, rest, set(sset.by_code))
+            c = _clean_draft(p, rest, {x.code for x in sset.scenarios if x.kind in EDITABLE_KINDS})
             if c is None:
                 continue
             action, target, draft = c
@@ -301,6 +309,12 @@ def check(pr: ScenarioProposal, ext: dict) -> dict:
     for t in d.get("examples", []):
         m = sset.match(t)
         ex.append({"text": t, "matched": m.code if m else None, "ok": bool(m and m.code == target)})
+    from aicc_core.intents import interpret
+    from aicc_core.regression import REF
+    plain = [t for t in d.get("examples", []) if interpret(t, "ASK_AVAILABLE_DATE", REF).intent in
+             ("YES", "NO", "DATE", "ANYTIME", "REFUSAL", "BUSY", "WRONG_PERSON")]
+    if plain:
+        errors.append(f"단순 네/아니요·날짜·거절 같은 말은 표현으로 쓸 수 없습니다: “{plain[0]}”")
     stolen = [e for e in ex if e["matched"] and e["matched"] != target]
     if stolen:
         warnings.append(f"예시 {len(stolen)}개는 다른 답({stolen[0]['matched']})이 먼저 잡습니다")
@@ -316,7 +330,8 @@ def approve(db: Session, org: Organization, pr: ScenarioProposal, *, actor_id: s
     d = dict(pr.draft or {}, **(edits or {}))
     if edits:
         pr.draft = d
-        pr.checks = check(pr, scenario_ext(db, org.id))
+    # 승인 시점의 현재 상태로 항상 다시 검사(그 사이 다른 제안이 승인됐을 수 있음, 리뷰 2026-10-30)
+    pr.checks = check(pr, scenario_ext(db, org.id))
     if not pr.checks.get("ok"):
         raise ValueError("자동 검사를 통과하지 못한 제안입니다: " + "; ".join(pr.checks.get("errors", [])))
     if pr.action == "ADD_EXAMPLES":

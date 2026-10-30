@@ -196,7 +196,9 @@ def _add_clip(db: Session, p: Principal, code: str, text: str) -> dict:
                 made = True
             except Exception as e:  # noqa: BLE001
                 out[pack_key + "_error"] = re.sub(r"\s+", " ", str(e))[:200]
-        m["approved_by"] = None
+        if made:
+            m["approved_by"] = None  # 새 녹음이 들어감 → 들어 보고 다시 승인
+        # 녹음 없이 빈 칸만 생긴 경우는 들을 것이 없으므로 기존 승인을 유지(리뷰 2026-10-30: 승인만 해도 새 캠페인이 막힘)
         _new_version(db, p, pack_key, m)
         out[pack_key] = "녹음됨(승인 필요)" if made else "녹음 필요(빈칸만 채우기)"
     return out

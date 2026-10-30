@@ -49,7 +49,7 @@ class RunnerConfig:
     ring_timeout_ms: int = 40000
     poll_ms: int = 200
     listen_ms: int = 40           # 재생 중 상대 음성 확인 간격
-    router_timeout_s: float = 3.5  # 녹음 답 고르기 최대 대기(넘으면 기존 AI 답으로)
+    router_timeout_s: float = 3.0  # 녹음 답 고르기 최대 대기(그동안 AI 답도 같이 만듦, 넘으면 AI 답으로)
     hangup_tail_ms: int = 1200     # 마지막 안내가 끝난 뒤 끊기 전 여유(휴대폰 송출 지연만큼)
     analysis_async: bool = True   # 통화 후 AI 분석을 백그라운드로(다음 통화를 늦추지 않음)
     greeting_wait_ms: int = 1500  # 받자마자 '여보세요' 하는 동안 기다림
@@ -628,21 +628,28 @@ class CallRunner:
     def _ai(self, a: StartAI) -> None:
         self._emit("ai.start", a.turn, {"return_state": a.return_state})
         self._flush()
-        if self._route(a):
-            return
-        with cf.ThreadPoolExecutor(max_workers=1) as ex:
+        # AI 답 만들기를 먼저 시작해 두고, 그동안 녹음 답 고르기를 한다(리뷰 2026-10-30: 차례로 하면 고르기 실패 시
+        # 최대 3.5초 + AI 대기가 겹쳐 '잠시만요'까지 6초 넘게 침묵). 녹음 답을 고르면 AI 결과는 버린다.
+        t0 = time.monotonic()
+        ex = cf.ThreadPoolExecutor(max_workers=1)
+        try:
             ctx = build_prompt(a.question, a.return_state, self._dialog_lines())
             fut = ex.submit(self.ai.respond, a.question, timeout_s=self.cfg.ai_timeout_s, context=ctx)
+            if self._route(a):
+                return
+            left = self.cfg.ai_wait_after_ms / 1000 - (time.monotonic() - t0)
             try:
-                reply = fut.result(timeout=self.cfg.ai_wait_after_ms / 1000)
+                reply = fut.result(timeout=max(0.05, left))
             except cf.TimeoutError:
                 if not self.ai_wait_played:
                     self.ai_wait_played = True
                     self._play(Play("ai_wait", a.turn, {}))
                 try:
-                    reply = fut.result(timeout=self.cfg.ai_timeout_s)
+                    reply = fut.result(timeout=max(0.5, self.cfg.ai_timeout_s - (time.monotonic() - t0)))
                 except cf.TimeoutError:
                     reply = None
+        finally:
+            ex.shutdown(wait=False)
         if self.flow.turn != a.turn or self.flow.finished:
             self._emit("ai.discarded", a.turn, {"reason": "stale_turn"})  # 지난 턴 AI 오디오 폐기
             return

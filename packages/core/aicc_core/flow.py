@@ -530,7 +530,7 @@ class CallFlow:
                 return None  # "평일만, 다음 주 월요일부터요" → 날짜 처리 우선(메모는 남김)
             return self._scenario_play(s, eid)
         # '다음 주에 다시 물어봐 주세요', '내일 대답할게요' 처럼 날짜가 들어 있어도 재연락 요청이면 날짜 답이 아니다
-        if dated and not (s.kind == "END" and s.outcome == "CALLBACK_REQUESTED" and s.code.startswith("FAQ_")):
+        if dated and not (s.kind == "END" and s.outcome == "CALLBACK_REQUESTED" and s.code.startswith(("FAQ_", "LRN_"))):
             return None
         if s.kind == "END":
             if s.code == "UNKNOWN_SCHEDULE" and self.state == "ASK_END_DATE" and self._has(BY_CODE["END_UNKNOWN"].key):

@@ -438,3 +438,50 @@ def test_tx_failure_after_remote_hangup_is_not_device_error():
     assert not r._ended_by_remote(DeviceError("USB 끊김"))
     d.state = "IDLE"
     assert r._ended_by_remote(DeviceError("USB 끊김"))  # 통화가 이미 끝났으면 상대 종료
+
+
+def test_router_and_ai_run_together():
+    """리뷰 2026-10-30: 녹음 답 고르기가 실패해도 그동안 AI 답이 이미 만들어지고 있어야(차례로 기다리지 않음)."""
+    import time as _t
+
+    from aicc_agent.ai import AIReply
+    from aicc_agent.runner import CallRunner, RunnerConfig
+    from aicc_core.flow import StartAI
+
+    calls = []
+
+    class SlowAI:
+        name = "x"
+
+        def respond(self, q, timeout_s=10, context=None):
+            calls.append(("ai", _t.monotonic()))
+            _t.sleep(0.3)
+            return AIReply(False, None, None, 300, "x")
+
+    class SlowRouter:
+        name = "mock"
+
+        def choose(self, *a, **k):
+            calls.append(("router", _t.monotonic()))
+            _t.sleep(0.3)
+            return None
+
+    class Flow:
+        turn = 1
+        finished = False
+        from aicc_core.scenario_types import Scenario
+        sc = type("S", (), {"scenarios": (Scenario("X", "INFO", (), "답"),), "examples": {}})()
+
+        def ai_failed(self, turn):
+            return []
+
+    r = CallRunner(None, None, None, SlowAI(), RunnerConfig(ai_wait_after_ms=5000))
+    r.router, r.flow, r.is_mock, r.call_id, r.ai_wait_played = SlowRouter(), Flow(), True, "c", False
+    r.voice = type("V", (), {"manifest": {"clips": {"sc_x": {"file": "f"}}}})()
+    r._emit = lambda *a, **k: "e"
+    r._flush = lambda: None
+    r._dialog_lines = lambda: []
+    t0 = _t.monotonic()
+    r._ai(StartAI("엘리베이터는요", "ASK_AVAILABLE_DATE", 1))
+    assert [c[0] for c in calls] and {c[0] for c in calls} == {"ai", "router"}
+    assert _t.monotonic() - t0 < 0.55  # 0.3 + 0.3 이 아니라 동시에
