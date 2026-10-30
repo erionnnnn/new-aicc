@@ -467,6 +467,11 @@ def in_call_window(org: Organization) -> bool:
     return s <= now <= e
 
 
+def _scenario_ext(db: Session, org_id: str) -> dict:
+    from .learning import scenario_ext
+    return scenario_ext(db, org_id)
+
+
 def claim_next(db: Session, p: Principal) -> dict:
     dev = p.device
     assert dev is not None
@@ -532,6 +537,7 @@ def claim_next(db: Session, p: Principal) -> dict:
         "voice_pack": {"id": pack.id, "digest": pack.digest, "manifest": pack.manifest},
         "reference_date": today_kst().isoformat(),
         "max_call_seconds": int((p.org.policies or {}).get("max_call_seconds") or 300),
+        "scenarios": _scenario_ext(db, p.org.id),  # 승인된 시나리오 변경(학습된 답·끄기·표현 추가)
     }
 
 

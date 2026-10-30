@@ -20,8 +20,8 @@ from datetime import date
 from .dates import DateMention
 from .faq import KEEP_STATE
 from .intents import Interpretation, interpret
+from .scenario_set import ScenarioSet
 from .scenarios import BY_CODE, Scenario
-from .scenarios import match as match_scenario
 
 # '여보세요' 만 말함 = 안내를 못 들었거나 연결 확인 → AI 로 넘기지 않고 바로 "제 목소리 잘 들리세요?"(2026-10-29 실통화:
 # 여보세요가 AI 로 넘어가 '잠시만요' 뒤 9초 침묵)
@@ -130,8 +130,10 @@ class Observation:
 class CallFlow:
     def __init__(self, reference: date, *, max_reprompt: int = 2, max_ai: int = 2, max_corrections: int = 3,
                  clips: set[str] | frozenset[str] | None = None, max_scenarios: int = 8,
-                 ai_conversation: bool = False, max_ai_conversation: int = 6):
+                 ai_conversation: bool = False, max_ai_conversation: int = 6, scenario_ext: dict | None = None):
         self.reference = reference
+        # 기본 시나리오 + 회사가 승인한 변경(학습된 답·끄기·표현 추가). 2026-10-30
+        self.sc = ScenarioSet(scenario_ext)
         self.state = "QUEUED"
         self.turn = 0
         self.max_reprompt = max_reprompt
@@ -187,7 +189,7 @@ class CallFlow:
 
         # 1) 전역 최우선
         dele = BY_CODE["CUSTOM_DELETE_REVIEW"]
-        if self._has(dele.key) and match_scenario(text, ("DELETE", "REVIEW")) is dele:  # 녹음 삭제 요청(REVIEW)은 연락거부가 아님
+        if self._has(dele.key) and self.sc.match(text, ("DELETE", "REVIEW")) is dele:  # 녹음 삭제 요청(REVIEW)은 연락거부가 아님
             # 연락처 삭제 요청 = 연락거부(즉시 차단) + 삭제는 담당자 확인
             self.obs.history.append({"event": "REFUSAL", "event_id": event_id, "delete_request": True})
             self.review_reasons.append(dele.review)
@@ -205,7 +207,7 @@ class CallFlow:
                     MarkReview("WRONG_PERSON"), *self._end("WRONG_PERSON")]
         if it.intent == "BUSY":
             drive = BY_CODE["DRIVING"]
-            key = drive.key if self._has(drive.key) and match_scenario(text, ("END",)) is drive else "callback"
+            key = drive.key if self._has(drive.key) and self.sc.match(text, ("END",)) is drive else "callback"
             return [self._play(key), HangUp("busy"), *self._end("CALLBACK_REQUESTED")]
 
         if self.state == "AI_EXCEPTION":
@@ -270,7 +272,7 @@ class CallFlow:
         고른 답을 쓸 수 없으면(녹음 없음·날짜가 섞임 등) None → 기존 AI 답으로."""
         if self.finished or self.state != "AI_EXCEPTION" or turn != self.turn:
             return None
-        sc = BY_CODE.get(code)
+        sc = self.sc.by_code.get(code)
         if sc is None or not self._has(sc.key):
             return None
         q = self.transcript[-1]["text"] if self.transcript else ""
@@ -434,7 +436,7 @@ class CallFlow:
                 self.obs.confirmation_state = "RANGE"
                 self.review_reasons.append("DATE_RANGE_ONLY")
                 return [self._play(self._review_close()), HangUp("range"), *self._end("UNCONFIRMED")]
-            period = BY_CODE.get("FAQ_PERIOD_ONLY")
+            period = self.sc.by_code.get("FAQ_PERIOD_ONLY")
             if period and self._has(period.key):  # '다음 주는 돼요' → AI 대신 '며칠부터 가능하실까요?' 녹음
                 self.reprompts[self.state] = n + 1
                 return [self._play(period.key)]
@@ -508,7 +510,7 @@ class CallFlow:
 
     def _scenario(self, text: str, it: Interpretation, eid: str, forced: Scenario | None = None) -> list[Action] | None:
         """녹음된 상황 응답(기존 ars_scenarios). 해당 없거나 일정 답이 함께 있으면 None(기존 흐름으로)."""
-        s: Scenario | None = forced or match_scenario(text)
+        s: Scenario | None = forced or self.sc.match(text)
         if s is None:
             return None
         # '월요일부터 금요일만'처럼 요일 이름만 있는 평일·주말 선호는 날짜 답이 아니다

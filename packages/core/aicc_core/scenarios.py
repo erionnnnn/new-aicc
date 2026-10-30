@@ -195,9 +195,19 @@ def match(text: str, kinds: tuple[str, ...] = ("DELETE", "REVIEW", "PREF", "END"
     if not t:
         return None
     for s in SCENARIOS:
-        if s.kind in kinds and any(re.search(k, t) for k in s.keywords):
+        if s.kind in kinds and any(_pat(k).search(t) for k in s.keywords):
             return s
     return None
+
+
+_PATS: dict[str, re.Pattern] = {}
+
+
+def _pat(k: str) -> re.Pattern:
+    p = _PATS.get(k)
+    if p is None:
+        p = _PATS[k] = re.compile(k)
+    return p
 
 
 # 기존 녹음 → 우리 안내 자리(사용자 확인 2026-10-27, 'AICC_안내음성_적용계획.xlsx' 녹음 배정 시트)

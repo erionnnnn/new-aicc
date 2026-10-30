@@ -11,6 +11,7 @@ import ExportPage from "./pages/Export";
 import BlocksPage from "./pages/Blocks";
 import SettingsPage from "./pages/Settings";
 import CampaignsPage from "./pages/Campaigns";
+import ScenariosPage from "./pages/Scenarios";
 
 export type Route = { path: string; params: URLSearchParams };
 
@@ -30,6 +31,7 @@ const NAV: { group: string; items: { path: string; label: string }[] }[] = [
   { group: "통화", items: [{ path: "/campaigns", label: "캠페인" }] },
   { group: "결과", items: [{ path: "/review", label: "결과 검수" }, { path: "/export", label: "결과 다운로드" }] },
   { group: "녹음", items: [{ path: "/recordings", label: "녹음 목록" }] },
+  { group: "대화", items: [{ path: "/scenarios", label: "시나리오" }] },
   { group: "설정", items: [{ path: "/settings", label: "설정과 진단" }] },
 ];
 
@@ -157,6 +159,7 @@ export default function App() {
       case "/recordings": return <RecordingsPage me={user} />;
       case "/export": return <ExportPage me={user} campaignId={p.get("campaign")} />;
       case "/blocks": return <BlocksPage me={user} />;
+      case "/scenarios": return <ScenariosPage me={user} tab={p.get("tab") || "proposals"} />;
       case "/settings": return <SettingsPage me={user} tab={p.get("tab") || "policy"} onChanged={me.reload} />;
       default: return <UploadPage me={user} />;
     }

@@ -184,7 +184,8 @@ class CallRunner:
         self.voice = VoiceBank(pack["manifest"], lambda k: self._fetch_clip(pack["id"], k), self.is_mock)
         clips = {k for k, c in (pack["manifest"].get("clips") or {}).items() if c.get("file")}
         conv = getattr(self.ai, "name", "") not in ("failing",) and not self.is_mock
-        self.flow = CallFlow(date.fromisoformat(claim["reference_date"]), clips=clips, ai_conversation=conv)
+        self.flow = CallFlow(date.fromisoformat(claim["reference_date"]), clips=clips, ai_conversation=conv,
+                             scenario_ext=claim.get("scenarios"))
         if hasattr(self.ai, "voice"):  # AI 목소리를 녹음과 같게(여성 Aoede / 남성 Charon)
             self.ai.voice = "Charon" if pack["manifest"].get("gender") == "male" else "Aoede"
         self.max_call_ms = int(claim.get("max_call_seconds") or 300) * 1000
@@ -600,13 +601,11 @@ class CallRunner:
         rt = getattr(self, "router", None)
         if rt is None or self.is_mock and rt.name != "mock":
             return False
-        from aicc_core.scenarios import SCENARIOS
-
         from .ai import STATE_GOAL
         from .router import build_candidates
         clips = {k for k, c in (self.voice.manifest.get("clips") or {}).items() if c.get("file")} \
             if hasattr(self.voice, "manifest") else set()
-        cands = build_candidates(SCENARIOS, clips)
+        cands = build_candidates(self.flow.sc.scenarios, clips, self.flow.sc.examples)
         if not cands:
             return False
         t0 = time.monotonic()

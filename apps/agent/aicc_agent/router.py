@@ -36,12 +36,16 @@ JSON 하나만 출력: {{"code": "코드 또는 NONE", "why": "짧은 이유"}}
 ROUTER_MODELS = ("gemini-3.5-flash-lite", "gemini-3.8-flash")
 
 
-def build_candidates(scenarios, clips: set[str]) -> list[tuple[str, str]]:  # noqa: ANN001
-    """녹음이 있는 상황 답(INFO·REVIEW·PREF·END)만 후보로."""
+def build_candidates(scenarios, clips: set[str], examples: dict | None = None) -> list[tuple[str, str]]:  # noqa: ANN001
+    """녹음이 있는 상황 답(INFO·REVIEW·PREF·END)만 후보로. 승인된 실제 표현이 있으면 '(예: …)'로 붙인다."""
     out = []
     for s in scenarios:
         if s.kind in ("INFO", "REVIEW", "PREF", "END") and s.key in clips:
-            out.append((s.code, re.sub(r"\s+", " ", s.say)[:70]))
+            label = re.sub(r"\s+", " ", s.say)[:70]
+            ex = (examples or {}).get(s.code) or []
+            if ex:
+                label += " (예: " + " / ".join(str(x)[:30] for x in ex[:3]) + ")"
+            out.append((s.code, label))
     return out
 
 

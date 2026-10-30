@@ -254,3 +254,9 @@ audio { height: 32px; max-width: 260px; }
 
 .ai-box { margin-top: var(--s4); padding: var(--s3) var(--s4); border: 1px dashed var(--line); border-radius: var(--radius-panel); background: var(--bg); }
 .ai-box h3 { margin-top: 0; }
+
+.segmented a.seg { display: inline-block; padding: 6px 12px; text-decoration: none; color: inherit; }
+.segmented a.seg[aria-selected="true"] { font-weight: 650; border-bottom: 2px solid var(--primary); }
+.checks { margin: var(--s3) 0; padding: var(--s2) var(--s3); border-radius: var(--radius-panel); background: var(--bg); }
+.checks.bad { border: 1px solid #FECDCA; }
+.table tr.warn-row td { background: var(--warn-bg); }

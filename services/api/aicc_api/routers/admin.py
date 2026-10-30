@@ -36,6 +36,7 @@ POLICY_KEYS = {
     "max_attempts": int, "retry_interval_minutes": int, "recording_notice_confirmed": bool,
     "recording_notice_text": str, "ai_external_transfer_confirmed": bool, "silence_seconds": int,
     "pilot_enabled": bool, "test_numbers": list,
+    "auto_apply_examples": bool,  # 시나리오 학습: 검사 통과한 '표현 추가'는 자동 반영(새 답은 항상 승인)
 }
 
 

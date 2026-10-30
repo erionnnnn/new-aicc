@@ -14,7 +14,7 @@ from . import errors
 from .config import get_settings
 from .db import SessionLocal
 from .migrate import upgrade
-from .routers import admin, agent, auth, campaigns, roster
+from .routers import admin, agent, auth, campaigns, roster, scenarios
 
 log = logging.getLogger("aicc")
 
@@ -38,6 +38,10 @@ async def lifespan(_: FastAPI):
     with SessionLocal() as db:
         purge_expired(db)
         db.commit()
+    import os
+    if os.environ.get("AICC_LOCAL_AGENT") == "1" and os.environ.get("AICC_LEARN_NIGHTLY", "1") != "0":
+        from .learning import start_nightly
+        start_nightly(int(os.environ.get("AICC_LEARN_HOUR", "21")))  # 매일 밤 통화 기록으로 시나리오 제안
     yield
 
 
@@ -48,7 +52,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="간병사 일정 확인 AICC", version="0.1.0", lifespan=lifespan,
                   docs_url=None if s.is_production else "/api/docs", redoc_url=None, openapi_url="/api/openapi.json")
     errors.install(app)
-    for r in (auth.router, roster.router, campaigns.router, agent.router, admin.router):
+    for r in (auth.router, roster.router, campaigns.router, agent.router, admin.router, scenarios.router):
         app.include_router(r)
 
     @app.get("/api/v1/health")

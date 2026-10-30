@@ -303,6 +303,37 @@ class Recording(Base):
     created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=now)
 
 
+class ScenarioChange(Base):
+    """승인된 시나리오 변경(2026-10-30 학습 기능). action: LEARNED(새 답) | DISABLE(끄기) | ADD_KEYWORDS(표현 추가)."""
+    __tablename__ = "scenario_changes"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    code: Mapped[str] = mapped_column(String(60))
+    action: Mapped[str] = mapped_column(String(20))
+    data: Mapped[dict] = mapped_column(JSON, default=dict)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    proposal_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_by: Mapped[str] = mapped_column(String(36))
+    created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=now)
+
+
+class ScenarioProposal(Base):
+    """AI 가 통화 기록으로 만든 시나리오 제안. 사람이 승인해야 반영된다. action: NEW | ADD_EXAMPLES."""
+    __tablename__ = "scenario_proposals"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    status: Mapped[str] = mapped_column(String(20), default="PENDING")  # PENDING|APPROVED|REJECTED
+    action: Mapped[str] = mapped_column(String(20))
+    target_code: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    draft: Mapped[dict] = mapped_column(JSON, default=dict)
+    evidence: Mapped[dict] = mapped_column(JSON, default=dict)
+    checks: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=now)
+    decided_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(TZDateTime(), nullable=True)
+    decision_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
