@@ -191,3 +191,26 @@ def test_live_campaign_2026_10_29_17h(text, key, outcome):
     f.utterance("예", turn=f.turn, event_id="y")
     acts = f.utterance(text, turn=f.turn, event_id="x")
     assert [a.key for a in acts if isinstance(a, Play)] == [key] and f.outcome == outcome
+
+
+def test_call_screening_assistant_2026_10_30():
+    """상대 휴대폰 '통화 비서'(AI 대신 받기): '할 수 있는지 확인해 보겠습니다' → AI 대신 용건 녹음, 첫 인사 단계 유지."""
+    f = CallFlow(REF, clips=ALL, ai_conversation=True)
+    f.answered()
+    acts = f.utterance("할 수 있는지 확인해 보겠습니다.", turn=f.turn, event_id="s")
+    assert [a.key for a in acts if isinstance(a, Play)] == ["sc_faq_screen_ask"] and f.state == "OPENING"
+    assert "AI_SCREENED" in f.review_reasons
+    acts = f.utterance("지금 일 안 해요", turn=f.turn, event_id="h")  # 본인이 받아서 답하면 그대로 이어감
+    assert [a.key for a in acts if isinstance(a, Play)] == ["ask_available_date"]
+    g = CallFlow(REF, clips=ALL, ai_conversation=True)
+    g.answered()
+    acts = g.utterance("메시지를 남겨 주시면 전달해 드릴게요", turn=g.turn, event_id="m")
+    assert [a.key for a in acts if isinstance(a, Play)] == ["sc_faq_screen_message"] and g.outcome == "CALLBACK_REQUESTED"
+
+
+def test_short_what_goes_to_recording():
+    f = CallFlow(REF, clips=ALL, ai_conversation=True)
+    f.answered()
+    f.utterance("예?", turn=f.turn, event_id="a")
+    acts = f.utterance("뭐는?", turn=f.turn, event_id="b")  # 2026-10-30 실전: AI 8초 대기 중 끊김
+    assert [a.key for a in acts if isinstance(a, Play)] == ["sc_faq_which_work"]

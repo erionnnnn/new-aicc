@@ -543,7 +543,7 @@ class CallFlow:
         play = self._play(s.key)
         if self.state == "CONFIRM_DATE":
             return [*extra, play, self._question()]  # 답한 뒤 날짜 재확인을 다시
-        if s.code in KEEP_STATE and self.state in ("ASK_END_DATE", "ASK_AVAILABLE_DATE", "WAIT_AVAILABILITY"):
+        if s.code in KEEP_STATE and self.state in ("OPENING", "ASK_END_DATE", "ASK_AVAILABLE_DATE", "WAIT_AVAILABILITY"):
             return [*extra, play]  # 되묻기 답(끝에 같은 질문이 들어 있음) → 지금 질문 단계 그대로
         self.state = "WAIT_AVAILABILITY"
         return [*extra, play]

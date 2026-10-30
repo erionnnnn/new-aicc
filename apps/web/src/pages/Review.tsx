@@ -10,7 +10,7 @@ const REASON: Record<string, string> = {
   DIFFICULTY_REVIEW: "현장 어려움", CONTACT_REVIEW: "담당자 연결 요청", HEALTH: "건강 사유", NUMBER_SOURCE: "연락처 출처 문의",
   NEXT_DATE_UNKNOWN: "다음 일정 미정", END_DATE_UNKNOWN: "근무 종료일 모름(재연락)", RESTING: "당분간 휴식", MAX_CALL_DURATION: "최대 통화 시간 초과",
   ANSWER_DETECTION_UNKNOWN: "응답 감지 불가", HANGUP_FAILED_MANUAL: "종료 명령 실패(단말에서 직접 확인)",
-  TOO_MANY_CORRECTIONS: "날짜 정정 반복", SERVER_ERROR: "서버 오류",
+  TOO_MANY_CORRECTIONS: "날짜 정정 반복", SERVER_ERROR: "서버 오류", AI_SCREENED: "상대 휴대폰 통화 비서가 받음",
 };
 const reasonText = (r: string) => REASON[r] ?? (r.startsWith("UNCLEAR_") ? "응답 불명확" : r.startsWith("CONFIRM_REJECTED") ? "서버가 확정 거부" : r);
 
