@@ -140,6 +140,9 @@ PROPOSE_PROMPT = """너는 간병 매칭 회사의 전화 응대 시나리오 �
 - 금액·수수료·배정·일정 확정을 약속하거나 사실처럼 말하지 않는다(모르면 '실제 일감 소개 때 안내', '담당 실장님이 확인해 연락').
 - INFO·PREF·REVIEW 답은 끝에 근무 가능 날짜를 부드럽게 다시 묻는다. END 는 정중히 마무리한다.
 - 한 번만 나온 애매한 말, 날짜 답, 단순 네/아니요는 제안하지 않는다.
+- 뜻이 다른 말을 한 묶음에 섞지 않는다(예: '환자 나이'와 '일 많아요?'는 다른 묶음). 억지로 묶지 말고, 묶을 게 없으면 제안하지 않는다.
+- 뜻을 알 수 없는 말·잘못 들린 말(예: '레이디오')은 버린다.
+- 답 문장에 회사 소개·첫 인사(…입니다, 안내입니다)를 넣지 않는다. 통화는 이미 시작된 상태다.
 JSON 하나만: {{"proposals":[...]}}
 """
 
@@ -193,14 +196,57 @@ def _clean_draft(p: dict, items: list[dict], codes: set[str]) -> tuple[str, str 
     return None
 
 
+_LEAD_FILLER = re.compile(r"^(?:(?:여보세요|여보세여|네|예|아|어|음|저기요)[\s,.?!~]*)+")
+_GREETING = re.compile(r"^(?:(?:네|예)[\s,.]*)?(?:여보세요|여보세여|여보|안녕하세요)[\s.,?!~]*$")
+
+
+def strip_filler(text: str) -> str:
+    """'여보세요? 예. 아, 제가 …' → '제가 …'(앞의 인사·추임새는 표현이 아님)."""
+    t = _LEAD_FILLER.sub("", (text or "").strip()).strip()
+    return t or (text or "").strip()
+
+
+def skip_reason(text: str, sset: ScenarioSet) -> str | None:
+    """제안 재료로 쓰지 않을 말인지(2026-11-06: 이미 답이 생긴 말·인사·단순 답이 제안으로 올라와 모두 불합격)."""
+    from aicc_core.intents import interpret
+    from aicc_core.regression import REF
+    t = (text or "").strip()
+    if len(re.sub(r"[\s.,?!~]", "", t)) < 2:
+        return "너무 짧음"
+    if _GREETING.match(t):
+        return "인사만"
+    m = sset.match(t)
+    if m:
+        return f"이미 답 있음({m.code})"
+    if interpret(t, "ASK_AVAILABLE_DATE", REF).intent in _PLAIN_INTENTS:
+        return "단순 답"
+    return None
+
+
+_PLAIN_INTENTS = ("YES", "NO", "DATE", "ANYTIME", "REFUSAL", "BUSY", "WRONG_PERSON")
+
+
 def generate(db: Session, org: Organization, llm=gemini_llm, days: int = 7) -> list[ScenarioProposal]:  # noqa: ANN001
     """최근 통화로 제안을 만든다(이미 대기 중인 같은 제안은 다시 만들지 않음)."""
     data = collect(db, org.id, days)
-    items = data["unmatched"]
     ext = scenario_ext(db, org.id)
     sset = ScenarioSet(ext)
+    # 통화 뒤에 답이 새로 생긴 말·인사·단순 답은 빼고, 앞의 '여보세요? 예.' 같은 추임새는 떼고 쓴다
+    items = []
+    for it in data["unmatched"]:
+        t = strip_filler(it["text"])
+        if skip_reason(t, sset) is None:
+            items.append({**it, "text": t})
     # 이미 제안한 말(대기·승인·거절 모두)과 이미 배운 표현은 다시 제안하지 않는다
     prev = db.scalars(select(ScenarioProposal).where(ScenarioProposal.organization_id == org.id)).all()
+    # 대기 중인 새 답 제안 중 근거 말이 모두 쓸 수 없는 말(이미 답 있음·인사·단순 답)이면 자동으로 정리
+    from .services import utcnow
+    for pr in prev:
+        exs = (pr.draft or {}).get("examples") or []
+        if pr.status == "PENDING" and pr.action == "NEW" and exs and \
+                all(skip_reason(strip_filler(t), sset) for t in exs):
+            pr.status, pr.decided_by, pr.decided_at = "REJECTED", "auto", utcnow()
+            pr.decision_note = "자동 정리: 근거 말이 이미 다른 답으로 처리되거나 인사·단순 답"
     seen = {normalize(t) for pr in prev for t in (pr.draft or {}).get("examples", [])}
     known = {normalize(t) for v in ext["examples"].values() for t in v} | \
             {normalize(t) for d in ext["learned"] for t in (d.get("examples") or [])}
@@ -288,6 +334,8 @@ def check(pr: ScenarioProposal, ext: dict) -> dict:
             errors.append(f"확정 안 된 금액·약속 표현: {', '.join(bad)}")
         if len(t) > 120:
             errors.append("답이 너무 깁니다(120자 이내)")
+        if re.search(r"안내입니다|자동\s*안내|에서 근무 일정 확인", t):
+            errors.append("첫 인사·회사 소개 문구는 답에 넣지 않습니다(통화는 이미 시작된 상태)")
         if d.get("kind") == "END" and d.get("outcome") not in ALLOWED_OUTCOMES:
             errors.append("종료 답에는 결과(재연락/미확정)가 필요합니다")
         if d.get("kind") in ("INFO", "PREF", "REVIEW") and not re.search(r"언제|날짜|며칠|가능하", t):
@@ -304,8 +352,7 @@ def check(pr: ScenarioProposal, ext: dict) -> dict:
         ex.append({"text": t, "matched": m.code if m else None, "ok": bool(m and m.code == target)})
     from aicc_core.intents import interpret
     from aicc_core.regression import REF
-    plain = [t for t in d.get("examples", []) if interpret(t, "ASK_AVAILABLE_DATE", REF).intent in
-             ("YES", "NO", "DATE", "ANYTIME", "REFUSAL", "BUSY", "WRONG_PERSON")]
+    plain = [t for t in d.get("examples", []) if interpret(t, "ASK_AVAILABLE_DATE", REF).intent in _PLAIN_INTENTS]
     if plain:
         errors.append(f"단순 네/아니요·날짜·거절 같은 말은 표현으로 쓸 수 없습니다: “{plain[0]}”")
     stolen = [e for e in ex if e["matched"] and e["matched"] != target]

@@ -39,7 +39,7 @@ def _seed_real_call(admin):
             ev("utterance.final", {"text": text, "state": "ASK_AVAILABLE_DATE"})
             ev("ai.start", {"return_state": "ASK_AVAILABLE_DATE"})
             ev("ai.done", {"text": "…"})
-        ev("utterance.final", {"text": "병원 어딘데", "state": "ASK_AVAILABLE_DATE"})
+        ev("utterance.final", {"text": "거기 동네가 어디예요", "state": "ASK_AVAILABLE_DATE"})
         ev("ai.start", {"return_state": "ASK_AVAILABLE_DATE"})
         ev("ai.routed", {"code": "FAQ_HOSPITAL_WHERE"})
         ev("play", {"key": "sc_faq_hospital_where"})
@@ -66,8 +66,8 @@ def test_collect_finds_unmatched_and_hangups(admin):
     with SessionLocal() as db:
         c = learning.collect(db, org_id, days=7)
     texts = [x["text"] for x in c["unmatched"]]
-    assert "엘리베이터는 있나요" in texts and "병원 어딘데" in texts
-    assert next(x for x in c["unmatched"] if x["text"] == "병원 어딘데")["routed"] == "FAQ_HOSPITAL_WHERE"
+    assert "엘리베이터는 있나요" in texts and "거기 동네가 어디예요" in texts
+    assert next(x for x in c["unmatched"] if x["text"] == "거기 동네가 어디예요")["routed"] == "FAQ_HOSPITAL_WHERE"
     assert c["plays"]["sc_faq_hospital_where"] == 1 and c["hangup_after"]["sc_faq_hospital_where"] == 1
 
 
@@ -99,7 +99,7 @@ def test_full_learning_loop(admin, monkeypatch):
     assert admin.post("/api/v1/scenario-proposals/generate", json={"days": 7}).json()["made"] == 0
     # 답 목록·끄기
     cat = {s["code"]: s for s in admin.get("/api/v1/scenarios").json()}
-    assert cat["LRN_ELEVATOR"]["source"] == "learned" and "병원 어딘데" in cat["FAQ_HOSPITAL_WHERE"]["examples"]
+    assert cat["LRN_ELEVATOR"]["source"] == "learned" and "거기 동네가 어디예요" in cat["FAQ_HOSPITAL_WHERE"]["examples"]
     assert admin.put("/api/v1/scenarios/FAQ_PATIENT_AGE", json={"enabled": False}).status_code == 200
     from aicc_api.db import SessionLocal
     org_id = admin.get("/api/v1/auth/me").json()["organization"]["id"]
@@ -113,7 +113,7 @@ def test_full_learning_loop(admin, monkeypatch):
     f.utterance("네", turn=f.turn, event_id="y")
     acts = f.utterance("엘리베이터는 있나요", turn=f.turn, event_id="q")
     assert [a.key for a in acts if isinstance(a, Play)] == ["sc_lrn_elevator"]
-    acts = f.utterance("병원 어딘데", turn=f.turn, event_id="h")
+    acts = f.utterance("거기 동네가 어디예요", turn=f.turn, event_id="h")
     assert [a.key for a in acts if isinstance(a, Play)] == ["sc_faq_hospital_where"]
     g = CallFlow(REF, clips=clips, ai_conversation=True, scenario_ext=ext)
     g.answered()
@@ -183,3 +183,46 @@ def test_review_fixes_2026_10_30(admin, monkeypatch):
     assert r.status_code == 200 and "녹음 필요" in r.json()["voice"]["female"]
     pack = next(p for p in admin.get("/api/v1/voice-packs").json() if p["key"] == "female")
     assert pack["approved_by"] and "sc_lrn_ok_sure" in pack["clips"]
+
+
+def test_generate_skips_answered_greeting_plain_2026_11_06(admin, monkeypatch):
+    """실사용 제안 3건이 모두 불합격: 이미 답이 있는 말·'여보세요.'·'네, 다음에 연락드릴게요.'가 재료로 들어감."""
+    from aicc_api.db import SessionLocal
+    from aicc_api.models import CallEvent, CallSession, ScenarioProposal
+    org_id = _seed_real_call(admin)
+    with SessionLocal() as db:
+        call = db.query(CallSession).filter(CallSession.is_mock.is_(False)).first()
+        for i, text in enumerate(("여보세요? 예. 아, 제가 지금 다리 수술해서 못 해요.", "여보세요.", "네, 다음에 연락드릴게요.",
+                                  "환자분이 몇 살이에요?")):
+            db.add(CallEvent(id=str(uuid.uuid4()), call_id=call.id, seq=2000 + i * 2, turn_id=1, type="utterance.final",
+                             payload={"text": text, "state": "ASK_AVAILABLE_DATE"}, occurred_at=datetime.now(timezone.utc)))
+            db.add(CallEvent(id=str(uuid.uuid4()), call_id=call.id, seq=2001 + i * 2, turn_id=1, type="ai.start",
+                             payload={"return_state": "ASK_AVAILABLE_DATE"}, occurred_at=datetime.now(timezone.utc)))
+        # 예전에 만들어진 불량 제안(근거가 인사뿐)
+        db.add(ScenarioProposal(organization_id=org_id, status="PENDING", action="NEW", target_code="LRN_SCREEN_INTRO",
+                                draft={"code": "LRN_SCREEN_INTRO", "kind": "INFO", "text": "x", "examples": ["여보세요."]},
+                                evidence={}, checks={}))
+        db.commit()
+    seen = {}
+
+    def llm(prompt: str) -> str:
+        seen["prompt"] = prompt
+        return json.dumps({"proposals": [
+            {"action": "NEW", "code_hint": "INTRO", "kind": "INFO", "examples": [0],
+             "text": "안녕하세요, 좋은간병에서 근무 일정 확인드리는 안내입니다. 언제부터 가능하세요?"}]}, ensure_ascii=False)
+    monkeypatch.setattr(learning, "gemini_llm", llm)
+    assert admin.post("/api/v1/scenario-proposals/generate", json={"days": 7}).status_code == 200
+    p = seen["prompt"]
+    assert "엘리베이터는 있나요" in p  # 진짜 모르는 말은 그대로
+    for t in ("다리 수술", "여보세요.", "다음에 연락드릴게요", "몇 살이에요"):
+        assert t not in p.split("할 일:")[0].split("이미 있는 녹음 답")[0], t
+    props = admin.get("/api/v1/scenario-proposals?status=ALL").json()
+    old = next(x for x in props if x["target_code"] == "LRN_SCREEN_INTRO")
+    assert old["status"] == "REJECTED" and "자동 정리" in old["decision_note"]
+    intro = next(x for x in props if x["action"] == "NEW" and x["draft"]["code"] == "LRN_INTRO")
+    assert not intro["checks"]["ok"] and any("첫 인사" in e for e in intro["checks"]["errors"])
+
+
+def test_strip_filler():
+    assert learning.strip_filler("여보세요? 예. 아, 제가 지금 다리 수술해서 못 해요.") == "제가 지금 다리 수술해서 못 해요."
+    assert learning.strip_filler("네") == "네"
