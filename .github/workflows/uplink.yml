@@ -1,0 +1,30 @@
+name: build-uplink
+on:
+  push:
+    paths: ["android/uplink/**", ".github/workflows/uplink.yml"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - run: android/uplink/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: goodcare-uplink
+          path: android/uplink/out/*
+      # 빌드 결과를 저장소에 넣어 PC 에서 git pull 만으로 받게 한다(소스 해시 포함 매니페스트로 검증)
+      - name: commit jar
+        run: |
+          mkdir -p apps/agent/aicc_agent/bin
+          cp android/uplink/out/goodcare-uplink.jar android/uplink/out/goodcare-uplink.json apps/agent/aicc_agent/bin/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/agent/aicc_agent/bin
+          if git diff --cached --quiet; then echo "no change"; exit 0; fi
+          git commit -m "build: goodcare-uplink.jar (Uplink.java $(cut -c1-12 <<< "$(sha256sum android/uplink/src/com/goodcare/a24/Uplink.java)"))"
+          git push

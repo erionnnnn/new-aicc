@@ -1,0 +1,6 @@
+title = "new-aicc"
+[extend]
+useDefault = true
+[allowlist]
+description = "시험용 가짜 키·픽스처"
+paths = ['''tests/''', '''packages/contracts/openapi.json''']

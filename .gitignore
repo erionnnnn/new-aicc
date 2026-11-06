@@ -1,0 +1,23 @@
+# 비밀값·데이터(개인정보 포함) — 절대 커밋 금지
+.aicc/
+*.env
+!.env.example
+secrets.env
+agent.env
+probe_report.json
+probe_state.json
+
+# 빌드·환경
+.venv/
+.venv-melo/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+apps/web/node_modules/
+apps/web/dist/
+apps/web/*.tsbuildinfo
+tools/
