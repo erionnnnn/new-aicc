@@ -163,3 +163,30 @@ def test_past_date_not_accepted():
     for t in ["네", "쉬어요", "이번 주 수요일부터요"]:
         d.say(t)
     assert d.f.obs.available_date is None
+
+
+def test_real_calls_2026_11_06():
+    """실통화 로그: 첫 인사 중 '안녕하세요'로 끊김 → 첫 인사 다시, '안 하고 나왔는데' → 근무 안 함, 같은 건강 답 두 번 금지."""
+    from datetime import date as _d
+
+    from aicc_core.flow import CallFlow as _F
+    from aicc_core.flow import HangUp as _H
+    from aicc_core.flow import Play as _P
+    from aicc_core.scenarios import SCENARIO_KEYS as _K
+    clips = set(_K) | {"opening", "ask_available_date", "ask_working", "callback", "closing", "closing_review"}
+    f = _F(_d(2026, 11, 6), clips=clips, ai_conversation=True)
+    f.answered()
+
+    def say(t):
+        return [a.key for a in f.utterance(t, turn=f.turn, event_id=t) if isinstance(a, _P)]
+    assert say("안녕하세요.") == ["opening"]
+    assert say("누구세요?") == ["sc_custom_intro"]
+    assert say("아, 거기서 안 하고 나왔는데.") == ["ask_available_date"]
+    assert f.obs.work_status == "NOT_WORKING"
+    assert say("아파서 일 뭐 해요?") == ["sc_custom_health"]
+    acts = f.utterance("아파서 일 못한다구요.", turn=f.turn, event_id="h2")
+    assert [a.key for a in acts if isinstance(a, _P)] == ["sc_custom_staff_close"] and any(isinstance(a, _H) for a in acts)
+    g = _F(_d(2026, 11, 6), clips=clips, ai_conversation=True)
+    g.answered()
+    assert [a.key for a in g.utterance("여보세요.", turn=g.turn, event_id="a") if isinstance(a, _P)] == ["opening"]
+    assert [a.key for a in g.utterance("여보세요.", turn=g.turn, event_id="b") if isinstance(a, _P)] == ["sc_silence_check"]

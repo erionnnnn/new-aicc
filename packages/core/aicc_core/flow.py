@@ -151,6 +151,7 @@ class CallFlow:
         self.clips = frozenset(clips or ())
         self.max_scenarios = max_scenarios
         self.scenario_count = 0
+        self._sc_at: tuple[str, int] | None = None  # (마지막 상황 답 코드, 그때 발화 수)
         self.after_review = False
         # 대화형 AI: 규칙으로 못 알아들은 말을 '다시 말씀해 주세요' 대신 AI(같은 목소리)가 자연스럽게 받아 주고
         # 원래 확인하려던 질문으로 이끈다. 날짜 확정은 여전히 이 상태기계만 한다(AI 는 말만 함).
@@ -221,6 +222,10 @@ class CallFlow:
             n = self.reprompts.get(f"greet_{self.state}", 0)
             if n < 2:
                 self.reprompts[f"greet_{self.state}"] = n + 1
+                if self.state == "OPENING" and n == 0 and self._has("opening"):
+                    # 첫 인사 중에 '여보세요/안녕하세요'로 끊긴 경우 → 누가 왜 거는지 못 들었으니 첫 인사를 다시
+                    # (2026-11-06 실통화 2건: '들리세요?'만 나가고 상대가 '누구세요?' / 엉뚱한 답)
+                    return [self._play("opening")]
                 if self._has(check) and self.state != "CONFIRM_DATE":
                     return [self._play(check)]
                 return [self._question()]
@@ -547,13 +552,27 @@ class CallFlow:
                 self.obs.available_text = text
             return [*out, HangUp(s.code.lower()), *self._end(s.outcome or "UNCONFIRMED")]
         if s.kind in ("INFO", "REVIEW"):
+            if self._last_scenario() == s.code:
+                # 같은 답을 연달아 두 번 틀지 않는다(2026-11-06: '아파서…' 두 번 → 건강 안내 녹음 두 번)
+                close = BY_CODE["CUSTOM_STAFF_CLOSE"].key
+                if s.kind == "REVIEW" and self._has(close):
+                    return [self._play(close), HangUp("staff_close"), *self._end("CONSULT_REQUESTED")]
+                return [self._question()]
             if s.kind == "REVIEW":
                 self.after_review = True
             return self._scenario_play(s, eid)
         return None
 
+    def _last_scenario(self) -> str | None:
+        """바로 앞 발화(한 마디 전)에 튼 상황 답 코드. 그 사이 다른 말이 있었으면 None."""
+        last = self._sc_at
+        if last and last[1] == len(self.transcript) - 1:
+            return last[0]
+        return None
+
     def _scenario_play(self, s: Scenario, eid: str) -> list[Action]:
         self.scenario_count += 1
+        self._sc_at = (s.code, len(self.transcript))
         self.obs.history.append({"event": "SCENARIO", "code": s.code, "event_id": eid})
         extra: list[Action] = []
         if s.review and s.review not in self.review_reasons:  # 예: 입금·현장 문제 → 담당자 확인 필요 표시

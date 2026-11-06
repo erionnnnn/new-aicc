@@ -828,7 +828,11 @@ def put_local_agent(body: LocalAgentIn, p: Principal = Depends(current_user), db
     if body.gemini_model is not None:
         extra["AICC_GEMINI_MODEL"] = body.gemini_model
     if body.gemini_api_key is not None:
-        extra["GEMINI_API_KEY"] = body.gemini_api_key
+        gk = body.gemini_api_key.strip()
+        if gk.startswith("sk-"):  # 2026-11-06: 통화 중 'Gemini 키가 올바르지 않습니다' — OpenAI 키를 Gemini 칸에 넣는 실수 방지
+            raise AppError(422, "GEMINI_KEY_FORMAT", "이건 OpenAI 키(sk-…)입니다. 아래 '예상 밖 말 판단(GPT)' 칸에 넣으세요. "
+                                                     "Gemini 키는 Google AI Studio 에서 받은 키(보통 AIza 로 시작)입니다")
+        extra["GEMINI_API_KEY"] = gk
     if body.openai_api_key is not None:
         k = body.openai_api_key.strip()
         if k and not k.startswith("sk-"):
